@@ -68,14 +68,21 @@ class FaceSpoofDetector(context: Context) {
         val bottom = (cy + h / 2).coerceAtMost(image.height)
         val cropped = Bitmap.createBitmap(image, left, top, right - left, bottom - top)
         val scaled = Bitmap.createScaledBitmap(cropped, 80, 80, true) // Model input is 80x80
-        // Convert RGB to BGR (Important for this specific model)
-        val bgrBitmap = scaled.copy(Bitmap.Config.ARGB_8888, true)
-        for (i in 0 until 80) {
-            for (j in 0 until 80) {
-                val p = scaled.getPixel(i, j)
-                bgrBitmap.setPixel(i, j, Color.rgb(Color.blue(p), Color.green(p), Color.red(p)))
-            }
+        
+        // Optimized RGB to BGR conversion using bulk array operations
+        val pixels = IntArray(80 * 80)
+        scaled.getPixels(pixels, 0, 80, 0, 0, 80, 80)
+        
+        // Swap R and B channels in-place (much faster than pixel-by-pixel)
+        for (i in pixels.indices) {
+            val p = pixels[i]
+            pixels[i] = (p and 0xFF00FF00.toInt()) or  // Keep alpha and green
+                       ((p and 0x00FF0000) shr 16) or  // Blue -> Red position
+                       ((p and 0x000000FF) shl 16)     // Red -> Blue position
         }
+        
+        val bgrBitmap = Bitmap.createBitmap(80, 80, Bitmap.Config.ARGB_8888)
+        bgrBitmap.setPixels(pixels, 0, 80, 0, 0, 80, 80)
         return bgrBitmap
     }
     private fun softMax(logits: FloatArray): FloatArray {

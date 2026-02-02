@@ -29,7 +29,7 @@ export default function App() {
   const handleFaceDetected = ({ nativeEvent }: { nativeEvent: FaceRecognitionResult }) => {
     setResult(nativeEvent);
     // @ts-ignore
-    console.log(nativeEvent.spoofScore)
+    console.log(nativeEvent.success)
   };
 
   // if (!hasPermission) {
@@ -64,7 +64,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#000',
   },
   camera: {
-    flex: 1,
+    flex: 1
   },
   overlay: {
     position: 'absolute',
