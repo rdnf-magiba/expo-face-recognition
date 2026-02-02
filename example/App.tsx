@@ -32,9 +32,9 @@ export default function App() {
     console.log(nativeEvent.spoofScore)
   };
 
-  if (!hasPermission) {
-    return <View style={styles.container}><Text style={styles.headerText}>No Camera Permission</Text></View>;
-  }
+  // if (!hasPermission) {
+  //   return <View style={styles.container}><Text style={styles.headerText}>No Camera Permission</Text></View>;
+  // }
 
   return (
     <View style={styles.container}>

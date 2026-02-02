@@ -26,14 +26,22 @@ class FaceNet(context: Context) {
         val options = Interpreter.Options().apply { numThreads = 4 }
         interpreter = Interpreter(FileUtil.loadMappedFile(context, "facenet_512.tflite"), options)
     }
+
+    fun getFaceEmbeddingSync(faceBitmap: Bitmap): FloatArray {
+        return calculateFaceEmbedding(faceBitmap)
+    }
+
     suspend fun getFaceEmbedding(faceBitmap: Bitmap): FloatArray = withContext(Dispatchers.Default) {
+        return@withContext calculateFaceEmbedding(faceBitmap)
+    }
+
+    private fun calculateFaceEmbedding(faceBitmap: Bitmap): FloatArray {
         val tensorImage = imageProcessor.process(TensorImage.fromBitmap(faceBitmap))
         val outputBuffer = TensorBufferFloat.createFixedSize(intArrayOf(1, 512), DataType.FLOAT32)
-
         interpreter.run(tensorImage.buffer, outputBuffer.buffer.rewind())
-
-        return@withContext outputBuffer.floatArray
+        return outputBuffer.floatArray;
     }
+
     class NormalizeOp : TensorOperator {
         override fun apply(buffer: TensorBuffer?): TensorBuffer {
             val pixels = buffer!!.floatArray.map { it / 255f }.toFloatArray()

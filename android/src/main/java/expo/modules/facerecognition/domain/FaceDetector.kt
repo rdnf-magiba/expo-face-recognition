@@ -22,19 +22,12 @@ class FaceDetector(private val context: Context) {
         .build()
     private val detector = FaceDetection.getClient(highAccuracyOpts)
 
-    suspend fun detectFace(bitmap: Bitmap): Pair<Bitmap, Rect>? = withContext(Dispatchers.IO) {
-        // Run ML Kit Detection
-        val faces = Tasks.await(detector.process(InputImage.fromBitmap(bitmap, 0)))
+    fun detectFaceSync(bitmap: Bitmap): Pair<Bitmap, Rect>? {
+        return calculateFaceDetection(bitmap)
+    }
 
-        if (faces.isEmpty() || faces.size > 1) {
-            return@withContext null
-        }
-        val face = faces[0]
-        val rect = face.boundingBox
-        if (validateRect(bitmap, rect)) {
-            return@withContext Pair(bitmap, rect)
-        }
-        return@withContext null
+    suspend fun detectFace(bitmap: Bitmap): Pair<Bitmap, Rect>? = withContext(Dispatchers.IO) {
+        return@withContext calculateFaceDetection(bitmap)
     }
 
     suspend fun detectFace(imageUri: Uri): Pair<Bitmap, Rect>? = withContext(Dispatchers.IO) {
@@ -54,6 +47,22 @@ class FaceDetector(private val context: Context) {
         }
         return@withContext null
     }
+
+    private fun calculateFaceDetection(bitmap: Bitmap): Pair<Bitmap, Rect>? {
+        // Run ML Kit Detection
+        val faces = Tasks.await(detector.process(InputImage.fromBitmap(bitmap, 0)))
+
+        if (faces.isEmpty() || faces.size > 1) {
+            return null
+        }
+        val face = faces[0]
+        val rect = face.boundingBox
+        if (validateRect(bitmap, rect)) {
+            return Pair(bitmap, rect)
+        }
+        return null
+    }
+
     private fun validateRect(bitmap: Bitmap, rect: Rect): Boolean {
         return rect.left >= 0 && rect.top >= 0 &&
                 (rect.left + rect.width()) <= bitmap.width &&

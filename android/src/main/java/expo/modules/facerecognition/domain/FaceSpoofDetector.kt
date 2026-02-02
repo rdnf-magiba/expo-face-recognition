@@ -25,7 +25,16 @@ class FaceSpoofDetector(context: Context) {
         interpreter1 = Interpreter(FileUtil.loadMappedFile(context, "spoof_model_scale_2_7.tflite"), options)
         interpreter2 = Interpreter(FileUtil.loadMappedFile(context, "spoof_model_scale_4_0.tflite"), options)
     }
+
+    fun detectSpoofSync(fullFrame: Bitmap, faceRect: Rect): FaceSpoofResult {
+        return calculateSpoof(fullFrame, faceRect)
+    }
+
     suspend fun detectSpoof(fullFrame: Bitmap, faceRect: Rect): FaceSpoofResult = withContext(Dispatchers.Default) {
+        return@withContext calculateSpoof(fullFrame, faceRect)
+    }
+
+    private fun calculateSpoof(fullFrame: Bitmap, faceRect: Rect): FaceSpoofResult {
         val crop1 = processCrop(fullFrame, faceRect, 2.7f)
         val crop2 = processCrop(fullFrame, faceRect, 4.0f)
         // Run Model 1
@@ -44,8 +53,9 @@ class FaceSpoofDetector(context: Context) {
         val maxIndex = combined.indexOf(combined.maxOrNull() ?: -1f)
         val isSpoof = maxIndex != 1
         val confidence = combined[maxIndex]
-        return@withContext FaceSpoofResult(isSpoof, confidence)
+        return FaceSpoofResult(isSpoof, confidence)
     }
+
     private fun processCrop(image: Bitmap, rect: Rect, scale: Float): Bitmap {
         // Crop logic based on scale
         val cx = rect.centerX()
