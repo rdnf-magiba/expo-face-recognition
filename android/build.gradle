@@ -41,3 +41,13 @@ android {
     abortOnError false
   }
 }
+
+dependencies {
+    // ML Kit for initial face detection
+    implementation 'com.google.mlkit:face-detection:16.1.7'
+
+    // TensorFlow Lite for Embeddings & Spoof Detection
+    implementation 'org.tensorflow:tensorflow-lite:2.14.0'
+    implementation 'org.tensorflow:tensorflow-lite-gpu:2.14.0'
+    implementation 'org.tensorflow:tensorflow-lite-support:0.4.4'
+}

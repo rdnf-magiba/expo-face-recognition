@@ -1,5 +1,4 @@
 // Reexport the native module. On web, it will be resolved to ExpoFaceRecognitionModule.web.ts
 // and on native platforms to ExpoFaceRecognitionModule.ts
 export { default } from './ExpoFaceRecognitionModule';
-export { default as ExpoFaceRecognitionView } from './ExpoFaceRecognitionView';
-export * from  './ExpoFaceRecognition.types';
+export * from './ExpoFaceRecognition.types';

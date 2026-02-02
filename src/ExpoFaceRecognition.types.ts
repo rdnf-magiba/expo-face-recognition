@@ -1,19 +1,21 @@
-import type { StyleProp, ViewStyle } from 'react-native';
-
-export type OnLoadEventPayload = {
-  url: string;
+export type FaceRecognitionLiveResult = {
+  success: true;
+  isLive: true;
+  embedding: number[];
 };
 
-export type ExpoFaceRecognitionModuleEvents = {
-  onChange: (params: ChangeEventPayload) => void;
+export type FaceRecognitionSpoofResult = {
+  success: true;
+  isLive: false;
+  spoofScore: number;
 };
 
-export type ChangeEventPayload = {
-  value: string;
+export type FaceRecognitionFailureResult = {
+  success: false;
+  error: string;
 };
 
-export type ExpoFaceRecognitionViewProps = {
-  url: string;
-  onLoad: (event: { nativeEvent: OnLoadEventPayload }) => void;
-  style?: StyleProp<ViewStyle>;
-};
+export type FaceRecognitionResult =
+  | FaceRecognitionLiveResult
+  | FaceRecognitionSpoofResult
+  | FaceRecognitionFailureResult;
