@@ -15,6 +15,7 @@ import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
+import com.google.mlkit.vision.common.InputImage
 import expo.modules.kotlin.AppContext
 import expo.modules.kotlin.viewevent.EventDispatcher
 import expo.modules.kotlin.views.ExpoView
@@ -242,22 +243,30 @@ class ExpoFaceRecognitionView(context: Context, appContext: AppContext) : ExpoVi
             imageProxy.close()
             return
         }
-        isProcessing = true
-        try {
-            val bitmap = imageProxy.toBitmap()
-            val rotation = imageProxy.imageInfo.rotationDegrees
-            val rotatedBitmap = rotateBitmap(bitmap, rotation.toFloat())
 
-            scope.launch {
-                try {
-                    val detection = faceDetector.detectFace(rotatedBitmap)
-                    if (detection != null) {
-                        val (fullImage, faceRect) = detection
-                        val spoof = faceSpoof.detectSpoof(fullImage, faceRect)
+        val mediaImage = imageProxy.image
+        if (mediaImage == null) {
+            imageProxy.close()
+            return
+        }
+
+        try {
+            val inputImage = InputImage.fromMediaImage(mediaImage, imageProxy.imageInfo.rotationDegrees)
+            val faceRect = faceDetector.detectFace(inputImage)
+
+            if (faceRect != null) {
+                isProcessing = true
+                val bitmap = imageProxy.toBitmap()
+                val rotation = imageProxy.imageInfo.rotationDegrees
+                val rotatedBitmap = rotateBitmap(bitmap, rotation.toFloat())
+
+                scope.launch {
+                    try {
+                        val spoof = faceSpoof.detectSpoof(rotatedBitmap, faceRect)
                         if (spoof.isSpoof) {
                             onFaceDetected(mapOf("success" to true, "isLive" to false, "spoofScore" to spoof.score))
                         } else {
-                            val croppedFace = Bitmap.createBitmap(fullImage, faceRect.left, faceRect.top, faceRect.width(), faceRect.height())
+                            val croppedFace = Bitmap.createBitmap(rotatedBitmap, faceRect.left, faceRect.top, faceRect.width(), faceRect.height())
                             val embedding = faceNet.getFaceEmbedding(croppedFace)
                             onFaceDetected(mapOf(
                                 "success" to true,
@@ -265,15 +274,15 @@ class ExpoFaceRecognitionView(context: Context, appContext: AppContext) : ExpoVi
                                 "embedding" to embedding.toList(),
                                 "spoofScore" to spoof.score))
                         }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error processing", e)
+                    } finally {
+                        isProcessing = false
                     }
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error processing", e)
-                } finally {
-                    isProcessing = false
                 }
             }
         } catch (e: Exception) {
-            isProcessing = false
+            Log.e(TAG, "Error processing image proxy", e)
         } finally {
             imageProxy.close()
         }

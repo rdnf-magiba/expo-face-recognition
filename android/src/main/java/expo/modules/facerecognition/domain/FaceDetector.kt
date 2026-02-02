@@ -16,7 +16,7 @@ import kotlinx.coroutines.withContext
 
 class FaceDetector(private val context: Context) {
     private val highAccuracyOpts = FaceDetectorOptions.Builder()
-        .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_ACCURATE)
+        .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_FAST)
         .setLandmarkMode(FaceDetectorOptions.LANDMARK_MODE_NONE)
         .setClassificationMode(FaceDetectorOptions.CLASSIFICATION_MODE_NONE)
         .build()
@@ -28,6 +28,21 @@ class FaceDetector(private val context: Context) {
 
     suspend fun detectFace(bitmap: Bitmap): Pair<Bitmap, Rect>? = withContext(Dispatchers.IO) {
         return@withContext calculateFaceDetection(bitmap)
+    }
+
+    fun detectFace(image: InputImage): Rect? {
+        val faces = Tasks.await(detector.process(image))
+        if (faces.isEmpty() || faces.size > 1) return null
+
+        val face = faces[0]
+        val rect = face.boundingBox
+        
+        // InputImage width/height should be the dimensions of the image being processed
+        // (i.e. if rotated, these are the rotated dimensions)
+        if (validateRect(image.width, image.height, rect)) {
+            return rect
+        }
+        return null
     }
 
     suspend fun detectFace(imageUri: Uri): Pair<Bitmap, Rect>? = withContext(Dispatchers.IO) {
@@ -42,7 +57,7 @@ class FaceDetector(private val context: Context) {
         }
         val face = faces[0]
         val rect = face.boundingBox
-        if (validateRect(bitmap, rect)) {
+        if (validateRect(bitmap.width, bitmap.height, rect)) {
             return@withContext Pair(bitmap, rect)
         }
         return@withContext null
@@ -57,17 +72,18 @@ class FaceDetector(private val context: Context) {
         }
         val face = faces[0]
         val rect = face.boundingBox
-        if (validateRect(bitmap, rect)) {
+        if (validateRect(bitmap.width, bitmap.height, rect)) {
             return Pair(bitmap, rect)
         }
         return null
     }
 
-    private fun validateRect(bitmap: Bitmap, rect: Rect): Boolean {
+    private fun validateRect(width: Int, height: Int, rect: Rect): Boolean {
         return rect.left >= 0 && rect.top >= 0 &&
-                (rect.left + rect.width()) <= bitmap.width &&
-                (rect.top + rect.height()) <= bitmap.height
+                (rect.left + rect.width()) <= width &&
+                (rect.top + rect.height()) <= height
     }
+
     private fun getBitmapFromUri(context: Context, imageUri: Uri): Bitmap? {
         context.contentResolver.openInputStream(imageUri)?.use { inputStream ->
             val exifInterface = ExifInterface(inputStream)
@@ -93,6 +109,4 @@ class FaceDetector(private val context: Context) {
         matrix.postRotate(degrees)
         return Bitmap.createBitmap(source, 0, 0, source.width, source.height, matrix, false)
     }
-
-
 }
