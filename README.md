@@ -1,35 +1,95 @@
-# expo-face-recognition
+# @rdnf-magiba/expo-face-recognition
 
-Face recognition
+A powerful Face Recognition library for Expo and React Native, utilizing **ML Kit** for face detection and **TensorFlow Lite** for face recognition/embeddings.
 
-# API documentation
+This module provides a camera view that detects faces in real-time and returns their embeddings, allowing you to build Face Attendance, Secure Login, or User Verification systems.
 
-- [Documentation for the latest stable release](https://docs.expo.dev/versions/latest/sdk/face-recognition/)
-- [Documentation for the main branch](https://docs.expo.dev/versions/unversioned/sdk/face-recognition/)
+## Features
 
-# Installation in managed Expo projects
+- 🚀 **Real-time Face Detection**: Uses Google's ML Kit for lightning-fast face bounds detection.
+- 🧠 **On-device Recognition**: Generates 512-d embeddings using FaceNet/MobileFaceNet TFLite models.
+- 📸 **Live Camera Preview**: Native Android camera view integration.
+- ⚡ **Performance**: Optimized for smooth 30fps detection on modern mobile devices.
+- 🤖 **Platform**: Android Only (iOS support coming soon).
 
-For [managed](https://docs.expo.dev/archive/managed-vs-bare/) Expo projects, please follow the installation instructions in the [API documentation for the latest stable release](#api-documentation). If you follow the link and there is no documentation available then this library is not yet usable within managed projects &mdash; it is likely to be included in an upcoming Expo SDK release.
+## Installation
 
-# Installation in bare React Native projects
-
-For bare React Native projects, you must ensure that you have [installed and configured the `expo` package](https://docs.expo.dev/bare/installing-expo-modules/) before continuing.
-
-### Add the package to your npm dependencies
-
-```
-npm install expo-face-recognition
+```bash
+npm install @rdnf-magiba/expo-face-recognition
 ```
 
-### Configure for Android
+## Configuration
 
+### Android Manual Setup
 
+This library currently does not include an Expo Config Plugin. You may need to manually configure permissions in your `android/app/src/main/AndroidManifest.xml` if not using standard Expo permissions.
 
+**Permissions**
 
-### Configure for iOS
+Ensure your app requests Camera permissions:
 
-Run `npx pod-install` after installing the npm package.
+**Android `AndroidManifest.xml`**
+```xml
+<uses-permission android:name="android.permission.CAMERA" />
+```
 
-# Contributing
+## Usage
 
-Contributions are very welcome! Please refer to guidelines described in the [contributing guide]( https://github.com/expo/expo#contributing).
+Import the `ExpoFaceRecognitionView` and use it in your component.
+
+```tsx
+import { ExpoFaceRecognitionView } from '@rdnf-magiba/expo-face-recognition';
+import { StyleSheet, View, Text } from 'react-native';
+
+export default function FaceAuthScreen() {
+  
+  const handleFacesDetected = (event: any) => {
+    // nativeEvent contains:
+    // - faces: Array of face objects (bounds, etc.)
+    // - recognition: Embedding data (if enabled)
+    console.log("Detected Faces:", event.nativeEvent);
+  };
+
+  return (
+    <View style={styles.container}>
+      <ExpoFaceRecognitionView 
+        style={styles.camera}
+        onFaceDetected={handleFacesDetected}
+      />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  camera: {
+    flex: 1,
+    width: '100%',
+  },
+});
+```
+
+## API Reference
+
+### `ExpoFaceRecognitionView`
+
+A React component that renders the camera view and performs face recognition.
+
+| Prop | Type | Description |
+|------|------|-------------|
+| `onFaceDetected` | `function` | Callback invoked when a face is detected. Returns face bounds and verification data. |
+| `style` | `ViewStyle` | Styles for the camera view container. |
+
+## Contributing
+
+Contributions are welcome!
+
+1. Clone the repo
+2. Install dependencies: `npm install`
+3. Run the example app: `npm run open:android` or `npm run open:ios`
+
+## License
+
+MIT

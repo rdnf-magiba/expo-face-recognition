@@ -1,5 +1,5 @@
 {
-  "name": "expo-face-recognition",
+  "name": "@rdnf-magiba/expo-face-recognition",
   "version": "0.1.0",
   "description": "Face recognition",
   "main": "build/index.js",
