@@ -21,6 +21,22 @@ class FaceDetector(private val context: Context) {
         .setClassificationMode(FaceDetectorOptions.CLASSIFICATION_MODE_ALL)
         .build()
     private val detector = FaceDetection.getClient(highAccuracyOpts)
+
+    suspend fun detectFace(bitmap: Bitmap): Pair<Bitmap, Rect>? = withContext(Dispatchers.IO) {
+        // Run ML Kit Detection
+        val faces = Tasks.await(detector.process(InputImage.fromBitmap(bitmap, 0)))
+
+        if (faces.isEmpty() || faces.size > 1) {
+            return@withContext null
+        }
+        val face = faces[0]
+        val rect = face.boundingBox
+        if (validateRect(bitmap, rect)) {
+            return@withContext Pair(bitmap, rect)
+        }
+        return@withContext null
+    }
+
     suspend fun detectFace(imageUri: Uri): Pair<Bitmap, Rect>? = withContext(Dispatchers.IO) {
         val bitmap = getBitmapFromUri(context, imageUri) ?: return@withContext null
 

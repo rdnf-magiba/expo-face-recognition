@@ -70,5 +70,8 @@ class ExpoFaceRecognitionModule : Module() {
             }
         }
 
+        View(ExpoFaceRecognitionView::class) {
+            Events("onFaceDetected")
+        }
     }
 }

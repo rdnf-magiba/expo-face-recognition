@@ -1,158 +1,105 @@
-import { useState } from 'react';
-import { StyleSheet, Text, View, Button, Image, ScrollView, SafeAreaView, ActivityIndicator } from 'react-native';
-import * as ImagePicker from 'expo-image-picker';
-import ExpoFaceRecognition, { FaceRecognitionResult } from 'expo-face-recognition';
+import { useState, useEffect } from 'react';
+import { StyleSheet, Text, View, SafeAreaView, PermissionsAndroid } from 'react-native';
+import { ExpoFaceRecognitionView, FaceRecognitionResult } from 'expo-face-recognition';
 
 export default function App() {
-  const [image, setImage] = useState<string | null>(null);
   const [result, setResult] = useState<FaceRecognitionResult | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [hasPermission, setHasPermission] = useState(false);
 
-  const pickImage = async () => {
-    // No permissions request is necessary for launching the image library
-    let result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsEditing: false,
-      quality: 1,
-    });
+  useEffect(() => {
+    (async () => {
+      const granted = await PermissionsAndroid.request(
+        PermissionsAndroid.PERMISSIONS.CAMERA,
+        {
+          title: "Camera Permission",
+          message: "App needs access to your camera ",
+          buttonNeutral: "Ask Me Later",
+          buttonNegative: "Cancel",
+          buttonPositive: "OK"
+        }
+      );
+      if (granted === PermissionsAndroid.RESULTS.GRANTED) {
+        setHasPermission(true);
+      } else {
+        console.log("Camera permission denied");
+      }
+    })();
+  }, []);
 
-    if (!result.canceled) {
-      const uri = result.assets[0].uri;
-      setImage(uri);
-      processFace(uri);
-    }
+  const handleFaceDetected = ({ nativeEvent }: { nativeEvent: FaceRecognitionResult }) => {
+    setResult(nativeEvent);
+    // @ts-ignore
+    console.log(nativeEvent.spoofScore)
   };
 
-  const processFace = async (uri: string) => {
-    setLoading(true);
-    setResult(null);
-    try {
-      console.log('Processing face for URI:', uri);
-      const response = await ExpoFaceRecognition.processFace(uri);
-      console.log('Result:', response);
-      setResult(response);
-    } catch (e: any) {
-      console.error('Error processing face:', e);
-      setResult({ success: false, error: e.message || 'Unknown error' });
-    } finally {
-      setLoading(false);
-    }
-  };
+  if (!hasPermission) {
+    return <View style={styles.container}><Text style={styles.headerText}>No Camera Permission</Text></View>;
+  }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContainer}>
-        <Text style={styles.header}>Face Recognition Module</Text>
-
-        <View style={styles.buttonContainer}>
-          <Button title="Pick an Image to Process" onPress={pickImage} />
-        </View>
-
-        {image && (
-          <View style={styles.imageContainer}>
-            <Image source={{ uri: image }} style={styles.image} />
-          </View>
-        )}
-
-        {loading && <ActivityIndicator size="large" color="#0000ff" style={{ marginVertical: 20 }} />}
-
+    <View style={styles.container}>
+      <ExpoFaceRecognitionView
+        style={styles.camera}
+        onFaceDetected={handleFaceDetected}
+      />
+      <View style={styles.overlay}>
+        <Text style={styles.headerText}>Real-Time Face Recognition</Text>
         {result && (
-          <View style={styles.resultContainer}>
-            <Text style={styles.resultTitle}>Processing Result:</Text>
-            {result.success ? (
-              <View>
-                <Text style={styles.successText}>Success: {result.success.toString()}</Text>
-                <Text style={result.isLive ? styles.liveText : styles.spoofText}>
-                  Is Live: {result.isLive ? 'YES' : 'NO'}
-                </Text>
-                {'spoofScore' in result && (
-                  <Text>Spoof Score: {result.spoofScore}</Text>
-                )}
-                {'embedding' in result && (
-                  <Text>Embedding Length: {result.embedding.length}</Text>
-                )}
-              </View>
-            ) : (
-              <Text style={styles.errorText}>Error: {result.error}</Text>
-            )}
-            <Text style={styles.code}>{JSON.stringify(result, null, 2)}</Text>
+          <View style={styles.resultBox}>
+            <Text style={styles.label}>Success: {result.success ? "Yes" : "No"}</Text>
+            {'isLive' in result && <Text style={result.isLive ? styles.success : styles.error}>Live: {result.isLive ? "YES" : "NO"}</Text>}
+            {'spoofScore' in result && <Text style={styles.label}>Spoof Score: {result.spoofScore?.toFixed(3)}</Text>}
+            {'embedding' in result && <Text style={styles.label}>Embedding Size: {result.embedding?.length}</Text>}
+            {'error' in result && <Text style={styles.error}>{result.error}</Text>}
           </View>
         )}
-      </ScrollView>
-    </SafeAreaView>
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#000',
   },
-  scrollContainer: {
+  camera: {
+    flex: 1,
+  },
+  overlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
     padding: 20,
-    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
   },
-  header: {
-    fontSize: 24,
+  headerText: {
+    color: '#fff',
+    fontSize: 20,
     fontWeight: 'bold',
-    marginBottom: 20,
+    marginBottom: 10,
     textAlign: 'center',
   },
-  buttonContainer: {
-    marginBottom: 20,
-  },
-  imageContainer: {
-    width: '100%',
-    height: 300,
-    marginBottom: 20,
-    backgroundColor: '#f0f0f0',
+  resultBox: {
+    padding: 10,
+    backgroundColor: '#fff',
     borderRadius: 10,
-    overflow: 'hidden',
   },
-  image: {
-    width: '100%',
-    height: '100%',
-    resizeMode: 'contain',
+  label: {
+    fontSize: 16,
+    marginBottom: 5,
   },
-  resultContainer: {
-    width: '100%',
-    padding: 15,
-    backgroundColor: '#f8f9fa',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#e9ecef',
-  },
-  resultTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    marginBottom: 10,
-  },
-  code: {
-    fontFamily: 'monospace',
-    fontSize: 12,
-    marginTop: 10,
-    color: '#333',
-  },
-  successText: {
+  success: {
     color: 'green',
     fontSize: 16,
     fontWeight: 'bold',
   },
-  errorText: {
+  error: {
     color: 'red',
     fontSize: 16,
     fontWeight: 'bold',
-  },
-  liveText: {
-    color: 'green',
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginVertical: 5,
-  },
-  spoofText: {
-    color: 'orange',
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginVertical: 5,
   }
 });

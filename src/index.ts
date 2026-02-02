@@ -2,3 +2,5 @@
 // and on native platforms to ExpoFaceRecognitionModule.ts
 export { default } from './ExpoFaceRecognitionModule';
 export * from './ExpoFaceRecognition.types';
+export { default as ExpoFaceRecognitionView } from './ExpoFaceRecognitionView';
+
