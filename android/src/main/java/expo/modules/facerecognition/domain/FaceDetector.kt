@@ -5,41 +5,42 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
 import android.graphics.Rect
-import android.net.Uri
 import androidx.exifinterface.media.ExifInterface
-import com.google.android.gms.tasks.Tasks
-import com.google.mlkit.vision.common.InputImage
-import com.google.mlkit.vision.face.FaceDetection
-import com.google.mlkit.vision.face.FaceDetectorOptions
+import android.net.Uri
+import androidx.core.graphics.toRect
+import com.google.mediapipe.framework.image.BitmapImageBuilder
+import com.google.mediapipe.tasks.core.BaseOptions
+import com.google.mediapipe.tasks.vision.core.RunningMode
+import com.google.mediapipe.tasks.vision.facedetector.FaceDetector as MPFaceDetector
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 class FaceDetector(private val context: Context) {
-    private val highAccuracyOpts = FaceDetectorOptions.Builder()
-        .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_FAST)
-        .setLandmarkMode(FaceDetectorOptions.LANDMARK_MODE_NONE)
-        .setClassificationMode(FaceDetectorOptions.CLASSIFICATION_MODE_NONE)
-        .build()
-    private val detector = FaceDetection.getClient(highAccuracyOpts)
+    // The model is stored in the assets folder
+    private val modelName = "blaze_face_short_range.tflite"
+    private val baseOptions = BaseOptions.builder().setModelAssetPath(modelName).build()
+    private val faceDetectorOptions =
+        MPFaceDetector.FaceDetectorOptions
+            .builder()
+            .setBaseOptions(baseOptions)
+            .setRunningMode(RunningMode.IMAGE)
+            .build()
+    private val faceDetector = MPFaceDetector.createFromOptions(context, faceDetectorOptions)
 
-    fun detectFaceSync(bitmap: Bitmap): Pair<Bitmap, Rect>? {
-        return calculateFaceDetection(bitmap)
-    }
-
-    suspend fun detectFace(bitmap: Bitmap): Pair<Bitmap, Rect>? = withContext(Dispatchers.IO) {
-        return@withContext calculateFaceDetection(bitmap)
-    }
-
-    fun detectFace(image: InputImage): Rect? {
-        val faces = Tasks.await(detector.process(image))
-        if (faces.isEmpty() || faces.size > 1) return null
-
-        val face = faces[0]
-        val rect = face.boundingBox
+    fun detectFace(bitmap: Bitmap): Rect? {
+        val mpImage = BitmapImageBuilder(bitmap).build()
+        val detectionResult = faceDetector.detect(mpImage)
+        val faces = detectionResult.detections()
         
-        // InputImage width/height should be the dimensions of the image being processed
-        // (i.e. if rotated, these are the rotated dimensions)
-        if (validateRect(image.width, image.height, rect)) {
+        // Strict single face detection to match previous/requested behavior
+        if (faces.isEmpty() || faces.size > 1) {
+            return null
+        }
+        
+        val face = faces[0]
+        val rect = face.boundingBox().toRect()
+        
+        if (validateRect(bitmap.width, bitmap.height, rect)) {
             return rect
         }
         return null
@@ -47,36 +48,70 @@ class FaceDetector(private val context: Context) {
 
     suspend fun detectFace(imageUri: Uri): Pair<Bitmap, Rect>? = withContext(Dispatchers.IO) {
         val bitmap = getBitmapFromUri(context, imageUri) ?: return@withContext null
-
-        // Run ML Kit Detection
-        val faces = Tasks.await(detector.process(InputImage.fromBitmap(bitmap, 0)))
+        val mpImage = BitmapImageBuilder(bitmap).build()
+        val faces = faceDetector.detect(mpImage).detections()
 
         if (faces.isEmpty() || faces.size > 1) {
-            // Return null if no face or multiple faces found (strict mode)
             return@withContext null
         }
-        val face = faces[0]
-        val rect = face.boundingBox
+        val rect = faces[0].boundingBox().toRect()
         if (validateRect(bitmap.width, bitmap.height, rect)) {
             return@withContext Pair(bitmap, rect)
         }
         return@withContext null
     }
 
-    private fun calculateFaceDetection(bitmap: Bitmap): Pair<Bitmap, Rect>? {
-        // Run ML Kit Detection
-        val faces = Tasks.await(detector.process(InputImage.fromBitmap(bitmap, 0)))
+    suspend fun getCroppedFace(imageUri: Uri): Result<Bitmap> =
+        withContext(Dispatchers.IO) {
+            val imageBitmap =
+                getBitmapFromUri(context, imageUri) ?: return@withContext Result.failure<Bitmap>(
+                    AppException(ErrorCode.FACE_DETECTOR_FAILURE),
+                )
 
-        if (faces.isEmpty() || faces.size > 1) {
-            return null
+            val faces = faceDetector.detect(BitmapImageBuilder(imageBitmap).build()).detections()
+            if (faces.size > 1) {
+                return@withContext Result.failure<Bitmap>(AppException(ErrorCode.MULTIPLE_FACES))
+            } else if (faces.size == 0) {
+                return@withContext Result.failure<Bitmap>(AppException(ErrorCode.NO_FACE))
+            } else {
+                val rect = faces[0].boundingBox().toRect()
+                if (validateRect(imageBitmap.width, imageBitmap.height, rect)) {
+                    val croppedBitmap =
+                        Bitmap.createBitmap(
+                            imageBitmap,
+                            rect.left,
+                            rect.top,
+                            rect.width(),
+                            rect.height(),
+                        )
+                    return@withContext Result.success(croppedBitmap)
+                } else {
+                    return@withContext Result.failure<Bitmap>(
+                        AppException(ErrorCode.FACE_DETECTOR_FAILURE),
+                    )
+                }
+            }
         }
-        val face = faces[0]
-        val rect = face.boundingBox
-        if (validateRect(bitmap.width, bitmap.height, rect)) {
-            return Pair(bitmap, rect)
+
+    suspend fun getAllCroppedFaces(frameBitmap: Bitmap): List<Pair<Bitmap, Rect>> =
+        withContext(Dispatchers.IO) {
+            return@withContext faceDetector
+                .detect(BitmapImageBuilder(frameBitmap).build())
+                .detections()
+                .filter { validateRect(frameBitmap.width, frameBitmap.height, it.boundingBox().toRect()) }
+                .map { detection -> detection.boundingBox().toRect() }
+                .map { rect ->
+                    val croppedBitmap =
+                        Bitmap.createBitmap(
+                            frameBitmap,
+                            rect.left,
+                            rect.top,
+                            rect.width(),
+                            rect.height(),
+                        )
+                    Pair(croppedBitmap, rect)
+                }
         }
-        return null
-    }
 
     private fun validateRect(width: Int, height: Int, rect: Rect): Boolean {
         return rect.left >= 0 && rect.top >= 0 &&
@@ -89,11 +124,8 @@ class FaceDetector(private val context: Context) {
             val exifInterface = ExifInterface(inputStream)
             val orientation = exifInterface.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
 
-            // Re-open stream for decoding
             context.contentResolver.openInputStream(imageUri)?.use { decodeStream ->
-                var bitmap = BitmapFactory.decodeStream(decodeStream)
-
-                // Handle rotation
+                val bitmap = BitmapFactory.decodeStream(decodeStream) ?: return null
                 return when (orientation) {
                     ExifInterface.ORIENTATION_ROTATE_90 -> rotateBitmap(bitmap, 90f)
                     ExifInterface.ORIENTATION_ROTATE_180 -> rotateBitmap(bitmap, 180f)
@@ -104,6 +136,7 @@ class FaceDetector(private val context: Context) {
         }
         return null
     }
+
     private fun rotateBitmap(source: Bitmap, degrees: Float): Bitmap {
         val matrix = Matrix()
         matrix.postRotate(degrees)

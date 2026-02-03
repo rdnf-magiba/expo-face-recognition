@@ -15,7 +15,7 @@ import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
-import com.google.mlkit.vision.common.InputImage
+
 import expo.modules.kotlin.AppContext
 import expo.modules.kotlin.viewevent.EventDispatcher
 import expo.modules.kotlin.views.ExpoView
@@ -251,14 +251,15 @@ class ExpoFaceRecognitionView(context: Context, appContext: AppContext) : ExpoVi
         }
 
         try {
-            val inputImage = InputImage.fromMediaImage(mediaImage, imageProxy.imageInfo.rotationDegrees)
-            val faceRect = faceDetector.detectFace(inputImage)
+            val bitmap = imageProxy.toBitmap()
+            val rotation = imageProxy.imageInfo.rotationDegrees.toFloat()
+            val rotatedBitmap = rotateBitmap(bitmap, rotation)
+
+            val faceRect = faceDetector.detectFace(rotatedBitmap)
 
             if (faceRect != null) {
                 isProcessing = true
-                val bitmap = imageProxy.toBitmap()
-                val rotation = imageProxy.imageInfo.rotationDegrees
-                val rotatedBitmap = rotateBitmap(bitmap, rotation.toFloat())
+                // Bitmap already created and rotated above
 
                 scope.launch {
                     try {
