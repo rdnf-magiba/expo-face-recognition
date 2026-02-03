@@ -1,13 +1,23 @@
+export type FaceRect = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
 export type FaceRecognitionLiveResult = {
   success: true;
   isLive: true;
   embedding: number[];
+  rect: FaceRect;
+  spoofScore: number;
 };
 
 export type FaceRecognitionSpoofResult = {
   success: true;
   isLive: false;
   spoofScore: number;
+  rect: FaceRect;
 };
 
 export type FaceRecognitionFailureResult = {

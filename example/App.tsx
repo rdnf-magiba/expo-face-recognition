@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, PermissionsAndroid } from 'react-native';
+import { StyleSheet, Text, View, PermissionsAndroid, LayoutRectangle } from 'react-native';
 import { ExpoFaceRecognitionView, FaceRecognitionResult } from 'expo-face-recognition';
 
 export default function App() {
   const [result, setResult] = useState<FaceRecognitionResult | null>(null);
   const [hasPermission, setHasPermission] = useState(false);
+  const [viewLayout, setViewLayout] = useState<LayoutRectangle | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -28,7 +29,6 @@ export default function App() {
 
   const handleFaceDetected = ({ nativeEvent }: { nativeEvent: FaceRecognitionResult }) => {
     setResult(nativeEvent);
-    console.log(nativeEvent.success)
   };
 
   if (!hasPermission) {
@@ -40,7 +40,36 @@ export default function App() {
       <ExpoFaceRecognitionView
         style={styles.camera}
         onFaceDetected={handleFaceDetected}
+        onLayout={(event) => setViewLayout(event.nativeEvent.layout)}
       />
+
+      {/* Face Overlay */}
+      {result && result.success && 'rect' in result && viewLayout && (
+        <View
+          style={[
+            styles.faceBox,
+            {
+              left: result.rect.x * viewLayout.width,
+              top: result.rect.y * viewLayout.height,
+              width: result.rect.width * viewLayout.width,
+              height: result.rect.height * viewLayout.height,
+              borderColor: result.isLive ? '#00ff00' : '#ff0000',
+            },
+          ]}
+        >
+          <Text style={{
+            color: result.isLive ? '#00ff00' : '#ff0000',
+            backgroundColor: 'rgba(0,0,0,0.5)',
+            position: 'absolute',
+            top: -25,
+            left: 0,
+            paddingHorizontal: 5
+          }}>
+            {result.isLive ? 'LIVE' : 'SPOOF'} ({'spoofScore' in result ? result.spoofScore.toFixed(2) : ''})
+          </Text>
+        </View>
+      )}
+
       <View style={styles.overlay}>
         <Text style={styles.headerText}>Real-Time Face Recognition</Text>
         {result && (
@@ -65,6 +94,12 @@ const styles = StyleSheet.create({
   camera: {
     flex: 1,
   },
+  faceBox: {
+    position: 'absolute',
+    borderWidth: 3,
+    borderRadius: 8,
+    zIndex: 10,
+  },
   overlay: {
     position: 'absolute',
     bottom: 0,
@@ -74,6 +109,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.7)',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
+    zIndex: 20,
   },
   headerText: {
     color: '#fff',

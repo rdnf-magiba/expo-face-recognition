@@ -184,33 +184,51 @@ class ExpoFaceRecognitionView(context: Context, appContext: AppContext) : ExpoVi
             val rotation = imageProxy.imageInfo.rotationDegrees.toFloat()
             val rotatedBitmap = rotateBitmap(bitmap, rotation)
             
-            val faceRect = faceDetector.detectFace(rotatedBitmap)
+            val result = faceDetector.detectFace(rotatedBitmap)
 
-            if (faceRect != null) {
+            if (result != null) {
                 isProcessing = true
+                val (croppedBitmap, faceRect) = result
                 scope.launch {
                     try {
                         val spoof = faceSpoof.detectSpoof(rotatedBitmap, faceRect)
+
+                        val normalizedRect = getNormalizedFaceRect(
+                            faceRect,
+                            rotatedBitmap.width.toFloat(),
+                            rotatedBitmap.height.toFloat(),
+                            width.toFloat(),
+                            height.toFloat(),
+                            mirrorX = true // Front camera
+                        )
+
+                        val resultMap = mutableMapOf<String, Any>(
+                            "success" to true,
+                            "rect" to normalizedRect,
+                            "spoofScore" to spoof.score
+                        )
+
                         if (spoof.isSpoof) {
-                            onFaceDetected(mapOf("success" to true, "isLive" to false, "spoofScore" to spoof.score))
+                            resultMap["isLive"] = false
                         } else {
-                            val croppedFace = Bitmap.createBitmap(rotatedBitmap, faceRect.left, faceRect.top, faceRect.width(), faceRect.height())
-                            val embedding = faceNet.getFaceEmbedding(croppedFace)
-                            onFaceDetected(mapOf(
-                                "success" to true,
-                                "isLive" to true,
-                                "embedding" to embedding.toList(),
-                                "spoofScore" to spoof.score))
+                            val embedding = faceNet.getFaceEmbedding(croppedBitmap)
+                            resultMap["isLive"] = true
+                            resultMap["embedding"] = embedding.toList()
                         }
+                        onFaceDetected(resultMap)
                     } catch (e: Exception) {
                         Log.e(TAG, "Error processing", e)
+                        onFaceDetected(mapOf("success" to false, "error" to e.localizedMessage))
                     } finally {
                         isProcessing = false
                     }
                 }
+            } else {
+                onFaceDetected(mapOf("success" to false, "error" to "No face detected"))
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error processing image proxy", e)
+            onFaceDetected(mapOf("success" to false, "error" to e.localizedMessage))
         } finally {
             imageProxy.close()
         }
@@ -221,6 +239,54 @@ class ExpoFaceRecognitionView(context: Context, appContext: AppContext) : ExpoVi
         val matrix = Matrix()
         matrix.postRotate(degrees)
         return Bitmap.createBitmap(source, 0, 0, source.width, source.height, matrix, false)
+    }
+
+    private fun getNormalizedFaceRect(
+        faceRect: android.graphics.Rect,
+        imageWidth: Float,
+        imageHeight: Float,
+        viewWidth: Float,
+        viewHeight: Float,
+        mirrorX: Boolean = true
+    ): Map<String, Float> {
+        val scale: Float
+        val dx: Float
+        val dy: Float
+        
+        val viewRatio = viewWidth / viewHeight
+        val imageRatio = imageWidth / imageHeight
+        
+        if (viewRatio > imageRatio) {
+            // View is wider than image: Image is scaled to match view width, cropped vertically
+            scale = viewWidth / imageWidth
+            dx = 0f
+            dy = (viewHeight - imageHeight * scale) / 2f
+        } else {
+            // View is taller than image: Image is scaled to match view height, cropped horizontally
+            scale = viewHeight / imageHeight
+            dx = (viewWidth - imageWidth * scale) / 2f
+            dy = 0f
+        }
+        
+        // Map coordinates to View pixels
+        val xPixel = faceRect.left * scale + dx
+        val yPixel = faceRect.top * scale + dy
+        val wPixel = faceRect.width() * scale
+        val hPixel = faceRect.height() * scale
+
+        // Normalize
+        val normX = if (mirrorX) {
+            1.0f - (xPixel / viewWidth) - (wPixel / viewWidth)
+        } else {
+            xPixel / viewWidth
+        }
+
+        return mapOf(
+            "x" to normX,
+            "y" to (yPixel / viewHeight),
+            "width" to (wPixel / viewWidth),
+            "height" to (hPixel / viewHeight)
+        )
     }
 
     // React Native specific hack for layout updates

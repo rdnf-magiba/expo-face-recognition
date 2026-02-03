@@ -27,7 +27,7 @@ class FaceDetector(private val context: Context) {
             .build()
     private val faceDetector = MPFaceDetector.createFromOptions(context, faceDetectorOptions)
 
-    fun detectFace(bitmap: Bitmap): Rect? {
+    fun detectFace(bitmap: Bitmap): Pair<Bitmap, Rect>? {
         val mpImage = BitmapImageBuilder(bitmap).build()
         val detectionResult = faceDetector.detect(mpImage)
         val faces = detectionResult.detections()
@@ -41,7 +41,15 @@ class FaceDetector(private val context: Context) {
         val rect = face.boundingBox().toRect()
         
         if (validateRect(bitmap.width, bitmap.height, rect)) {
-            return rect
+            val croppedBitmap =
+                Bitmap.createBitmap(
+                    bitmap,
+                    rect.left,
+                    rect.top,
+                    rect.width(),
+                    rect.height(),
+                )
+            return Pair(bitmap, rect)
         }
         return null
     }
