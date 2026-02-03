@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, SafeAreaView, PermissionsAndroid } from 'react-native';
+import { StyleSheet, Text, View, PermissionsAndroid } from 'react-native';
 import { ExpoFaceRecognitionView, FaceRecognitionResult } from 'expo-face-recognition';
 
 export default function App() {
@@ -28,13 +28,12 @@ export default function App() {
 
   const handleFaceDetected = ({ nativeEvent }: { nativeEvent: FaceRecognitionResult }) => {
     setResult(nativeEvent);
-    // @ts-ignore
     console.log(nativeEvent.success)
   };
 
-  // if (!hasPermission) {
-  //   return <View style={styles.container}><Text style={styles.headerText}>No Camera Permission</Text></View>;
-  // }
+  if (!hasPermission) {
+    return <View style={styles.container}><Text style={styles.headerText}>No Camera Permission</Text></View>;
+  }
 
   return (
     <View style={styles.container}>
@@ -64,7 +63,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#000',
   },
   camera: {
-    flex: 1
+    flex: 1,
   },
   overlay: {
     position: 'absolute',
