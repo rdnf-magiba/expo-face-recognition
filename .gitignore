@@ -55,3 +55,6 @@ yarn-error.log
 
 # Expo
 .expo/*
+
+# ML Models
+android/src/main/assets/*.tflite
