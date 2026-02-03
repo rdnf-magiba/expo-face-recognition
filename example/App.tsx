@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, PermissionsAndroid, LayoutRectangle } from 'react-native';
-import { ExpoFaceRecognitionView, FaceRecognitionResult } from 'expo-face-recognition';
+import { StyleSheet, Text, View, PermissionsAndroid, LayoutRectangle, Button, TouchableOpacity } from 'react-native';
+import { ExpoFaceRecognitionView, FaceRecognitionResult, processFace } from 'expo-face-recognition';
+import * as ImagePicker from 'expo-image-picker';
 
 export default function App() {
   const [result, setResult] = useState<FaceRecognitionResult | null>(null);
   const [hasPermission, setHasPermission] = useState(false);
   const [viewLayout, setViewLayout] = useState<LayoutRectangle | null>(null);
+  const [isLiveMode, setIsLiveMode] = useState(true);
 
   useEffect(() => {
     (async () => {
@@ -28,7 +30,37 @@ export default function App() {
   }, []);
 
   const handleFaceDetected = ({ nativeEvent }: { nativeEvent: FaceRecognitionResult }) => {
-    setResult(nativeEvent);
+    if (isLiveMode) {
+      setResult(nativeEvent);
+    }
+  };
+
+  const pickImage = async () => {
+    const pickerResult = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: false,
+      quality: 1,
+    });
+
+    if (!pickerResult.canceled && pickerResult.assets && pickerResult.assets.length > 0) {
+      setIsLiveMode(false);
+      setResult(null); // Clear previous result
+      try {
+        const uri = pickerResult.assets[0].uri;
+        console.log("Processing image:", uri);
+        const processingResult = await processFace(uri);
+        console.log("Result:", processingResult);
+        setResult(processingResult);
+      } catch (e) {
+        console.error("Error processing face:", e);
+        setIsLiveMode(true);
+      }
+    }
+  };
+
+  const resumeCamera = () => {
+    setIsLiveMode(true);
+    setResult(null);
   };
 
   if (!hasPermission) {
@@ -43,8 +75,8 @@ export default function App() {
         onLayout={(event) => setViewLayout(event.nativeEvent.layout)}
       />
 
-      {/* Face Overlay */}
-      {result && result.success && 'rect' in result && viewLayout && (
+      {/* Face Overlay - Only show in Live Mode or if we want to visualize rect relative to camera (which we can't for static image easily without image view) */}
+      {isLiveMode && result && result.success && 'rect' in result && viewLayout && (
         <View
           style={[
             styles.faceBox,
@@ -71,7 +103,15 @@ export default function App() {
       )}
 
       <View style={styles.overlay}>
-        <Text style={styles.headerText}>Real-Time Face Recognition</Text>
+        <View style={styles.buttonRow}>
+          <Button title="Pick Image" onPress={pickImage} />
+          {!isLiveMode && <Button title="Resume Camera" onPress={resumeCamera} color="green" />}
+        </View>
+
+        <Text style={styles.headerText}>
+          {isLiveMode ? "Real-Time Recognition" : "Static Image Result"}
+        </Text>
+
         {result && (
           <View style={styles.resultBox}>
             <Text style={styles.label}>Success: {result.success ? "Yes" : "No"}</Text>
@@ -114,10 +154,15 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     padding: 20,
-    backgroundColor: 'rgba(0,0,0,0.7)',
+    backgroundColor: 'rgba(0,0,0,0.85)',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     zIndex: 20,
+  },
+  buttonRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginBottom: 15,
   },
   headerText: {
     color: '#fff',

@@ -1,5 +1,10 @@
-// Reexport the native module. On web, it will be resolved to ExpoFaceRecognitionModule.web.ts
-// and on native platforms to ExpoFaceRecognitionModule.ts
+import ExpoFaceRecognitionModule from './ExpoFaceRecognitionModule';
+import { FaceRecognitionResult } from './ExpoFaceRecognition.types';
+
+export async function processFace(imageUri: string): Promise<FaceRecognitionResult> {
+    return await ExpoFaceRecognitionModule.processFace(imageUri);
+}
+
 export { default } from './ExpoFaceRecognitionModule';
 export * from './ExpoFaceRecognition.types';
 export { default as ExpoFaceRecognitionView } from './ExpoFaceRecognitionView';

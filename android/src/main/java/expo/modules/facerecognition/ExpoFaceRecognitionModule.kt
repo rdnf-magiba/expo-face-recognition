@@ -34,38 +34,73 @@ class ExpoFaceRecognitionModule : Module() {
         AsyncFunction("processFace") { imageUri: String, promise: Promise ->
             scope.launch {
                 try {
-                    val detection = faceDetector.detectFace(imageUri.toUri())
+                    val startTime = System.currentTimeMillis()
+                    var detectionTime = 0L
+                    var spoofTime = 0L
+                    var embeddingTime = 0L
+                    
+                    var detection: Pair<Bitmap, android.graphics.Rect>? = null
+                    detectionTime = kotlin.system.measureTimeMillis {
+                        detection = faceDetector.detectFace(imageUri.toUri())
+                    }
 
                     if (detection == null) {
                         promise.resolve(mapOf("success" to false, "error" to "No face detected"))
                         return@launch
                     }
-                    val (fullImage, faceRect) = detection
+                    val (fullImage, faceRect) = detection!!
 
                     // 1. Check Spoof
-                    val spoofResult = faceSpoof.detectSpoof(fullImage, faceRect)
-                    if (spoofResult.isSpoof) {
-                        promise.resolve(mapOf(
-                            "success" to true,
-                            "isLive" to false,
-                            "spoofScore" to spoofResult.score
-                        ))
-                        return@launch
+                    var spoofResult: expo.modules.facerecognition.domain.FaceSpoofDetector.FaceSpoofResult? = null
+                    spoofTime = kotlin.system.measureTimeMillis {
+                        spoofResult = faceSpoof.detectSpoof(fullImage, faceRect)
                     }
-                    // 2. Get Embedding (Crop face exactly for FaceNet)
-                    val croppedFace = Bitmap.createBitmap(
-                        fullImage,
-                        faceRect.left, faceRect.top,
-                        faceRect.width(), faceRect.height()
+                    
+                    val normalizedRect = mapOf(
+                        "x" to faceRect.left.toFloat(), // Absolute pixel coords or normalized? 
+                        // Types say "x, y, width, height". Usually normalized for View, but for file URI, probably pixel is better?
+                        // Wait, FaceRect type doesn't specify unit. In View event, likely normalized.
+                        // For a file process, usually users want absolute or normalized to image size.
+                        // I will return Normalized to Image Size [0..1]
+                        "x" to faceRect.left.toFloat() / fullImage.width.toFloat(),
+                        "y" to faceRect.top.toFloat() / fullImage.height.toFloat(),
+                        "width" to faceRect.width().toFloat() / fullImage.width.toFloat(),
+                        "height" to faceRect.height().toFloat() / fullImage.height.toFloat()
                     )
-                    val embedding = faceNet.getFaceEmbedding(croppedFace)
-                    promise.resolve(mapOf(
+
+                    val resultMap = mutableMapOf<String, Any>(
                         "success" to true,
-                        "isLive" to true,
-                        "embedding" to embedding.toList() // Send as Array<Double> to JS
-                    ))
+                        "rect" to normalizedRect,
+                        "spoofScore" to spoofResult!!.score
+                    )
+
+                    if (spoofResult!!.isSpoof) {
+                        resultMap["isLive"] = false
+                    } else {
+                        // 2. Get Embedding
+                        var embedding: FloatArray
+                        embeddingTime = kotlin.system.measureTimeMillis {
+                            val croppedFace = Bitmap.createBitmap(
+                                fullImage,
+                                faceRect.left, faceRect.top,
+                                faceRect.width(), faceRect.height()
+                            )
+                            embedding = faceNet.getFaceEmbedding(croppedFace)
+                        }
+                        resultMap["isLive"] = true
+                        resultMap["embedding"] = embedding.toList()
+                    }
+                    
+                    resultMap["duration"] = mapOf(
+                        "detection" to detectionTime,
+                        "spoof" to spoofTime,
+                        "embedding" to embeddingTime,
+                        "total" to (System.currentTimeMillis() - startTime)
+                    )
+                    
+                    promise.resolve(resultMap)
                 } catch (e: Exception) {
-                    promise.reject("ERR_PROCESSING", e.localizedMessage, e)
+                    promise.resolve(mapOf("success" to false, "error" to e.localizedMessage))
                 }
             }
         }
