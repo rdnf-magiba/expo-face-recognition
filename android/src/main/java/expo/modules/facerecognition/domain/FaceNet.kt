@@ -21,10 +21,14 @@ import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.withContext
 import org.tensorflow.lite.gpu.CompatibilityList
 
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
+
 class FaceNet(val context: Context) {
 
     // Dedicated thread for TFLite GPU Delegate (Must run on same thread as init)
     private val dispatcher = Executors.newSingleThreadExecutor().asCoroutineDispatcher()
+    private val scope = CoroutineScope(dispatcher)
     
     private var interpreter: Interpreter? = null
     private val imageProcessor = ImageProcessor.Builder()
@@ -32,9 +36,17 @@ class FaceNet(val context: Context) {
         .add(NormalizeOp())
         .build()
         
+    init {
+        scope.launch {
+            initializeInterpreter()
+        }
+    }
+        
     suspend fun getFaceEmbedding(faceBitmap: Bitmap): FloatArray = withContext(dispatcher) {
         if (interpreter == null) {
-            initializeInterpreter()
+            // Should have been initialized by init block, but if failed or slow, retry here.
+            // Since this runs on the same single-threaded dispatcher, it waits for init to finish naturally.
+            initializeInterpreter() 
         }
         return@withContext calculateFaceEmbedding(faceBitmap)
     }

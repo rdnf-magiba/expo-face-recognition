@@ -41,9 +41,9 @@ class ExpoFaceRecognitionView(context: Context, appContext: AppContext) : ExpoVi
     private var cameraProvider: ProcessCameraProvider? = null
     private var isCameraStarted = false
     
-    private val faceDetector by lazy { FaceDetector(context) }
-    private val faceSpoof by lazy { FaceSpoofDetector(context) }
-    private val faceNet by lazy { FaceNet(context) }
+    private val faceDetector = FaceDetector(context)
+    private val faceSpoof = FaceSpoofDetector(context)
+    private val faceNet = FaceNet(context)
 
     private var isProcessing = false
 
