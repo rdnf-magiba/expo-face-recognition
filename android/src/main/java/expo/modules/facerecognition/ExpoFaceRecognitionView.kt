@@ -7,13 +7,19 @@ import android.graphics.Matrix
 import android.util.Log
 import android.view.ViewGroup
 import android.widget.FrameLayout
+import androidx.camera.core.AspectRatio
 import androidx.camera.core.CameraSelector
+import androidx.camera.core.ExperimentalGetImage
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
 import androidx.camera.core.Preview
+import androidx.camera.core.resolutionselector.AspectRatioStrategy
+import androidx.camera.core.resolutionselector.ResolutionSelector
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
+import androidx.core.graphics.createBitmap
+import androidx.core.graphics.toRectF
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import expo.modules.kotlin.AppContext
@@ -27,7 +33,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.concurrent.Executors
+import kotlin.time.DurationUnit
+import kotlin.time.measureTimedValue
 
+@ExperimentalGetImage
 class ExpoFaceRecognitionView(context: Context, appContext: AppContext) : ExpoView(context, appContext), DefaultLifecycleObserver {
     
     companion object {
@@ -36,7 +45,6 @@ class ExpoFaceRecognitionView(context: Context, appContext: AppContext) : ExpoVi
     
     private val onFaceDetected by EventDispatcher()
     private var previewView: PreviewView? = null
-    private val cameraExecutor = Executors.newSingleThreadExecutor()
     private val scope = CoroutineScope(Dispatchers.IO)
     
     private var cameraProvider: ProcessCameraProvider? = null
@@ -47,49 +55,22 @@ class ExpoFaceRecognitionView(context: Context, appContext: AppContext) : ExpoVi
     private val faceNet = FaceNet(context)
 
     private var isProcessing = false
+    private var imageTransform: Matrix = Matrix()
+    private var boundingBoxTransform: Matrix = Matrix()
+    private var overlayWidth: Int = 0
+    private var overlayHeight: Int = 0
 
     private var isModelsInitialized = false
 
-    init {
-        // Use PreviewView - handles lifecycle and surface scaling automatically
-        previewView = PreviewView(context).apply {
-            layoutParams = FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT
-            )
-            scaleType = PreviewView.ScaleType.FILL_CENTER
-            // Use COMPATIBLE to use TextureView under the hood, compatible with complex UI hierarchies
-            implementationMode = PreviewView.ImplementationMode.COMPATIBLE
-        }
-        addView(previewView)
-        
-        // HACK: React Native sometimes doesn't layout child Android Views correctly immediately
-        // Force a layout pass after attachment
-        previewView?.post {
-            previewView?.measure(
-                MeasureSpec.makeMeasureSpec(width, MeasureSpec.EXACTLY),
-                MeasureSpec.makeMeasureSpec(height, MeasureSpec.EXACTLY)
-            )
-            previewView?.layout(0, 0, width, height)
-            
-            // Also trigger requestLayout to bubble up to RN
-            requestLayout() 
-        }
 
-        // Wait for models to load before allowing camera start
-        scope.launch {
-            Log.d(TAG, "Waiting for models to initialize...")
-            faceNet.waitForInit()
-            isModelsInitialized = true
-            Log.d(TAG, "Models initialized.")
-            
-            // If we are already attached/resumed, start camera now
-            withContext(Dispatchers.Main) {
-                if (isAttachedToWindow && !isCameraStarted) {
-                    startCameraIfReady()
-                }
-            }
-        }
+//    NEW
+    private var isImageTransformedInitialized = false
+    private var isBoundingBoxTransformedInitialized = false
+    private lateinit var frameBitmap: Bitmap
+//    NEW
+
+    init {
+        init()
     }
 
     override fun onAttachedToWindow() {
@@ -111,13 +92,55 @@ class ExpoFaceRecognitionView(context: Context, appContext: AppContext) : ExpoVi
         startCameraIfReady()
     }
 
+    private fun init() {
+        // Use PreviewView - handles lifecycle and surface scaling automatically
+        previewView = PreviewView(context).apply {
+            layoutParams = FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+            scaleType = PreviewView.ScaleType.FILL_CENTER
+            // Use COMPATIBLE to use TextureView under the hood, compatible with complex UI hierarchies
+            implementationMode = PreviewView.ImplementationMode.COMPATIBLE
+        }
+        addView(previewView)
+
+        // HACK: React Native sometimes doesn't layout child Android Views correctly immediately
+        // Force a layout pass after attachment
+        previewView?.post {
+            previewView?.measure(
+                MeasureSpec.makeMeasureSpec(width, MeasureSpec.EXACTLY),
+                MeasureSpec.makeMeasureSpec(height, MeasureSpec.EXACTLY)
+            )
+            previewView?.layout(0, 0, width, height)
+
+            // Also trigger requestLayout to bubble up to RN
+            requestLayout()
+        }
+
+        // Wait for models to load before allowing camera start
+        scope.launch {
+            Log.d(TAG, "Waiting for models to initialize...")
+            faceNet.waitForInit()
+            isModelsInitialized = true
+            Log.d(TAG, "Models initialized.")
+
+            // If we are already attached/resumed, start camera now
+            withContext(Dispatchers.Main) {
+                if (isAttachedToWindow && !isCameraStarted) {
+                    startCameraIfReady()
+                }
+            }
+        }
+    }
+
     private fun startCameraIfReady() {
         if (isCameraStarted) return
         if (!isModelsInitialized) {
             Log.d(TAG, "Camera start deferred - models not ready")
             return
         }
-        
+
         val activity = appContext.activityProvider?.currentActivity
         if (activity == null) {
             Log.e(TAG, "Activity is null")
@@ -130,8 +153,11 @@ class ExpoFaceRecognitionView(context: Context, appContext: AppContext) : ExpoVi
             return
         }
 
+        isImageTransformedInitialized = false
+        isBoundingBoxTransformedInitialized = false
         Log.d(TAG, "Starting camera...")
         val cameraProviderFuture = ProcessCameraProvider.getInstance(context)
+        val executor = ContextCompat.getMainExecutor(context)
         cameraProviderFuture.addListener({
             try {
                 cameraProvider = cameraProviderFuture.get()
@@ -139,7 +165,7 @@ class ExpoFaceRecognitionView(context: Context, appContext: AppContext) : ExpoVi
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to get camera provider", e)
             }
-        }, ContextCompat.getMainExecutor(context))
+        }, executor)
     }
 
     private fun stopCamera() {
@@ -155,25 +181,26 @@ class ExpoFaceRecognitionView(context: Context, appContext: AppContext) : ExpoVi
     private fun bindCameraUseCases(lifecycleOwner: LifecycleOwner) {
         val provider = cameraProvider ?: return
         val surfaceProvider = previewView?.surfaceProvider ?: return
-
-        provider.unbindAll()
-
         // Preview Use Case
         val preview = Preview.Builder().build()
         preview.setSurfaceProvider(surfaceProvider)
 
-        // Image Analysis Use Case
-        val imageAnalysis = ImageAnalysis.Builder()
-            .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-            .build()
-            .also { analysis ->
-                analysis.setAnalyzer(cameraExecutor) { imageProxy ->
-                    processImage(imageProxy)
-                }
-            }
-
         val cameraSelector = CameraSelector.DEFAULT_FRONT_CAMERA
 
+        val resolutionSelector = ResolutionSelector.Builder()
+            .setAspectRatioStrategy(AspectRatioStrategy.RATIO_16_9_FALLBACK_AUTO_STRATEGY)
+            .build()
+
+        // Image Analysis Use Case
+        val imageAnalysis = ImageAnalysis
+            .Builder()
+            .setResolutionSelector(resolutionSelector)
+            .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+            .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
+            .build()
+
+        imageAnalysis.setAnalyzer(Executors.newSingleThreadExecutor(), imageAnalyser)
+        provider.unbindAll()
         try {
             provider.bindToLifecycle(
                 lifecycleOwner,
@@ -188,100 +215,98 @@ class ExpoFaceRecognitionView(context: Context, appContext: AppContext) : ExpoVi
         }
     }
 
-    @androidx.annotation.OptIn(androidx.camera.core.ExperimentalGetImage::class)
-    private fun processImage(imageProxy: ImageProxy) {
-        if (isProcessing) {
-            imageProxy.close()
-            return
-        }
-
-        val mediaImage = imageProxy.image
-        if (mediaImage == null) {
-            imageProxy.close()
-            return
-        }
-
-        try {
-            val bitmap = imageProxy.toBitmap()
-            val rotation = imageProxy.imageInfo.rotationDegrees.toFloat()
-            val rotatedBitmap = rotateBitmap(bitmap, rotation)
-            
-            val startTime = System.currentTimeMillis()
-            
-            var result: Pair<Bitmap, android.graphics.Rect>? = null
-            val detectionTime = kotlin.system.measureTimeMillis {
-                result = faceDetector.detectFace(rotatedBitmap)
-            }
-
-            if (result != null) {
-                isProcessing = true
-                val (croppedBitmap, faceRect) = result!!
-                scope.launch {
-                    try {
-                        var spoof: expo.modules.facerecognition.domain.FaceSpoofDetector.FaceSpoofResult? = null
-                        val spoofTime = kotlin.system.measureTimeMillis {
-                            spoof = faceSpoof.detectSpoof(rotatedBitmap, faceRect)
-                        }
-
-                        val normalizedRect = getNormalizedFaceRect(
-                            faceRect,
-                            rotatedBitmap.width.toFloat(),
-                            rotatedBitmap.height.toFloat(),
-                            width.toFloat(),
-                            height.toFloat(),
-                            mirrorX = true // Front camera
-                        )
-
-                        val resultMap = mutableMapOf<String, Any>(
-                            "success" to true,
-                            "rect" to normalizedRect,
-                            "spoofScore" to spoof!!.score
-                        )
-
-                        var embeddingTime = 0L
-                        if (spoof!!.isSpoof) {
-                            resultMap["isLive"] = false
-                        } else {
-                            var embedding: FloatArray
-                            embeddingTime = kotlin.system.measureTimeMillis {
-                                embedding = faceNet.getFaceEmbedding(croppedBitmap)
-                            }
-                            resultMap["isLive"] = true
-                            resultMap["embedding"] = embedding.toList()
-                        }
-                        
-                        // Add timings
-                        resultMap["duration"] = mapOf(
-                            "detection" to detectionTime,
-                            "spoof" to spoofTime,
-                            "embedding" to embeddingTime,
-                            "total" to (System.currentTimeMillis() - startTime)
-                        )
-                        
-                        onFaceDetected(resultMap)
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Error processing", e)
-                        onFaceDetected(mapOf("success" to false, "error" to e.localizedMessage))
-                    } finally {
-                        isProcessing = false
-                    }
-                }
-            } else {
-                onFaceDetected(mapOf("success" to false, "error" to "No face detected"))
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error processing image proxy", e)
-            onFaceDetected(mapOf("success" to false, "error" to e.localizedMessage))
-        } finally {
-            imageProxy.close()
-        }
+    private val imageAnalyser = ImageAnalysis.Analyzer { image ->
+        processFeed(image)
     }
 
-    private fun rotateBitmap(source: Bitmap, degrees: Float): Bitmap {
-        if (degrees == 0f) return source
-        val matrix = Matrix()
-        matrix.postRotate(degrees)
-        return Bitmap.createBitmap(source, 0, 0, source.width, source.height, matrix, false)
+
+    private fun processFeed(image: ImageProxy) {
+        Log.i("ImageAnalyser", "Image received")
+        if (isProcessing) {
+            image.close()
+            return
+        }
+        isProcessing = true
+        frameBitmap = createBitmap(image.image!!.width, image.image!!.height)
+        frameBitmap.copyPixelsFromBuffer(image.planes[0].buffer)
+        if (!isImageTransformedInitialized) {
+            imageTransform = Matrix()
+            imageTransform.apply { postRotate(image.imageInfo.rotationDegrees.toFloat()) }
+            isImageTransformedInitialized = true
+        }
+        frameBitmap =
+            Bitmap.createBitmap(
+                frameBitmap,
+                0,
+                0,
+                frameBitmap.width,
+                frameBitmap.height,
+                imageTransform,
+                false,
+            )
+        image.close()
+
+        if (!isBoundingBoxTransformedInitialized) {
+            boundingBoxTransform = Matrix()
+            boundingBoxTransform.apply {
+                setScale(
+                    overlayWidth / frameBitmap.width.toFloat(),
+                    overlayHeight / frameBitmap.height.toFloat(),
+                )
+                // Mirror the bounding box coordinates
+                // for front-facing camera
+                postScale(
+                    -1f,
+                    1f,
+                    overlayWidth.toFloat() / 2.0f,
+                    overlayHeight.toFloat() / 2.0f,
+                )
+            }
+            isBoundingBoxTransformedInitialized = true
+        }
+        CoroutineScope(Dispatchers.Default).launch {
+            val (faceDetectionResult, t1) = measureTimedValue { faceDetector.getAllCroppedFaces(frameBitmap) }
+
+            if (faceDetectionResult.isEmpty()) {
+                onFaceDetected(mapOf("success" to false, "error" to "No face detected"))
+                isProcessing = false
+                return@launch
+            }
+
+            for (result in faceDetectionResult) {
+                val (croppedBitmap, boundingBox) = result
+
+                val spoofResult = faceSpoof.detectSpoof(frameBitmap, boundingBox)
+
+                val resultMap = mutableMapOf<String, Any>(
+                    "success" to true,
+                    "isLive" to true,
+                    "rect" to getNormalizedFaceRect(boundingBox, image.height.toFloat(), image.width.toFloat(), width.toFloat(), height.toFloat())
+                )
+
+                if (spoofResult.isSpoof) {
+                    resultMap["isLive"] = false
+                    resultMap["spoofScore"] = spoofResult.score
+                    onFaceDetected(resultMap)
+                    isProcessing = false
+                    return@launch
+                }
+
+                val (embedding, t3) = measureTimedValue { faceNet.getFaceEmbedding(croppedBitmap) }
+
+                resultMap["embedding"] = embedding.toList()
+
+                resultMap["duration"] = mapOf(
+                    "detection" to t1.toLong(DurationUnit.MILLISECONDS),
+                    "spoof" to spoofResult.timeMillis,
+                    "embedding" to t3.toLong(DurationUnit.MILLISECONDS)
+                )
+                onFaceDetected(resultMap)
+                isProcessing = false
+
+            }
+            image.close()
+        }
     }
 
     private fun getNormalizedFaceRect(

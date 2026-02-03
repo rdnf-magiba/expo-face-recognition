@@ -39,7 +39,6 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
             const results: SearchResult[] = await index.search(embedding, { topK: 10 });
             if (results && results.length > 0) {
                 const best = results[0];
-                console.log(best.similarity)
                 // best.object is the user object we stored
                 if (best.similarity > MATCH_THRESHOLD) {
                     return { name: best.object.name, score: best.similarity };

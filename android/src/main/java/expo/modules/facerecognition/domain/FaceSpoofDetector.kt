@@ -13,9 +13,11 @@ import org.tensorflow.lite.support.common.ops.CastOp
 import org.tensorflow.lite.support.image.ImageProcessor
 import org.tensorflow.lite.support.image.TensorImage
 import kotlin.math.exp
+import kotlin.time.DurationUnit
+import kotlin.time.measureTime
 
 class FaceSpoofDetector(context: Context) {
-    data class FaceSpoofResult(val isSpoof: Boolean, val score: Float)
+    data class FaceSpoofResult(val isSpoof: Boolean, val score: Float, val timeMillis: Long)
     private val interpreter1: Interpreter
     private val interpreter2: Interpreter
     private val imageProcessor = ImageProcessor.Builder().add(CastOp(DataType.FLOAT32)).build()
@@ -44,11 +46,14 @@ class FaceSpoofDetector(context: Context) {
         // Run Model 1
         val input1 = imageProcessor.process(TensorImage.fromBitmap(crop1)).buffer
         val output1 = arrayOf(FloatArray(3)) // 3 classes
-        interpreter1.run(input1, output1)
         // Run Model 2
         val input2 = imageProcessor.process(TensorImage.fromBitmap(crop2)).buffer
         val output2 = arrayOf(FloatArray(3))
-        interpreter2.run(input2, output2)
+        val time =
+            measureTime {
+                interpreter1.run(input1, output1)
+                interpreter2.run(input2, output2)
+            }.toLong(DurationUnit.MILLISECONDS)
         // Average Softmax
         val score1 = softMax(output1[0])
         val score2 = softMax(output2[0])
@@ -57,7 +62,7 @@ class FaceSpoofDetector(context: Context) {
         val maxIndex = combined.indexOf(combined.maxOrNull() ?: -1f)
         val isSpoof = maxIndex != 1
         val confidence = combined[maxIndex]
-        return FaceSpoofResult(isSpoof, confidence)
+        return FaceSpoofResult(isSpoof, confidence, time)
     }
 
     private fun processCrop(image: Bitmap, rect: Rect, scale: Float): Bitmap {

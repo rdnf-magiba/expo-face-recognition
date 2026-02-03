@@ -4,7 +4,6 @@ import { ExpoFaceRecognitionView, FaceRecognitionResult, processFace } from 'exp
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { useUser } from '../components/UserContext';
-import { useIsFocused } from '@react-navigation/native'; // Or simple focus logic
 
 export default function recognitionScreen() {
     const router = useRouter();
@@ -51,28 +50,6 @@ export default function recognitionScreen() {
     const handleFaceDetected = ({ nativeEvent }: { nativeEvent: FaceRecognitionResult }) => {
         if (isLiveMode) {
             processResult(nativeEvent);
-        }
-    };
-
-    const pickImage = async () => {
-        const pickerResult = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,
-            allowsEditing: false,
-            quality: 1,
-        });
-
-        if (!pickerResult.canceled && pickerResult.assets && pickerResult.assets.length > 0) {
-            setIsLiveMode(false);
-            setResult(null);
-            setRecognizedName(null);
-            try {
-                const uri = pickerResult.assets[0].uri;
-                const processingResult = await processFace(uri);
-                processResult(processingResult);
-            } catch (e) {
-                console.error("Error processing face:", e);
-                setIsLiveMode(true);
-            }
         }
     };
 
@@ -124,7 +101,6 @@ export default function recognitionScreen() {
 
             <View style={styles.overlay}>
                 <View style={styles.buttonRow}>
-                    <Button title="Pick Image" onPress={pickImage} />
                     {!isLiveMode && <Button title="Resume Camera" onPress={resumeCamera} color="green" />}
                     <Button title="Register User" onPress={() => router.push('/register')} color="#2196F3" />
                 </View>

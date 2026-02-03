@@ -69,37 +69,32 @@ class FaceDetector(private val context: Context) {
         return@withContext null
     }
 
-    suspend fun getCroppedFace(imageUri: Uri): Result<Bitmap> =
-        withContext(Dispatchers.IO) {
-            val imageBitmap =
-                getBitmapFromUri(context, imageUri) ?: return@withContext Result.failure<Bitmap>(
-                    AppException(ErrorCode.FACE_DETECTOR_FAILURE),
-                )
-
-            val faces = faceDetector.detect(BitmapImageBuilder(imageBitmap).build()).detections()
-            if (faces.size > 1) {
-                return@withContext Result.failure<Bitmap>(AppException(ErrorCode.MULTIPLE_FACES))
-            } else if (faces.size == 0) {
-                return@withContext Result.failure<Bitmap>(AppException(ErrorCode.NO_FACE))
-            } else {
-                val rect = faces[0].boundingBox().toRect()
-                if (validateRect(imageBitmap.width, imageBitmap.height, rect)) {
-                    val croppedBitmap =
-                        Bitmap.createBitmap(
-                            imageBitmap,
-                            rect.left,
-                            rect.top,
-                            rect.width(),
-                            rect.height(),
-                        )
-                    return@withContext Result.success(croppedBitmap)
-                } else {
-                    return@withContext Result.failure<Bitmap>(
-                        AppException(ErrorCode.FACE_DETECTOR_FAILURE),
+    fun getCroppedFaceSync(imageUri: Uri): Pair<Bitmap, Rect>? {
+        val imageBitmap = getBitmapFromUri(context, imageUri) ?: return null
+        val faces = faceDetector.detect(BitmapImageBuilder(imageBitmap).build()).detections()
+        if (faces.size > 1) {
+            return null
+        } else if (faces.isEmpty()) {
+            return null
+        } else {
+            // Validate the bounding box and
+            // return the cropped face
+            val rect = faces[0].boundingBox().toRect()
+            if (validateRect(imageBitmap, rect)) {
+                val croppedBitmap =
+                    Bitmap.createBitmap(
+                        imageBitmap,
+                        rect.left,
+                        rect.top,
+                        rect.width(),
+                        rect.height()
                     )
-                }
+                return Pair(croppedBitmap, rect)
+            } else {
+                return null
             }
         }
+    }
 
     suspend fun getAllCroppedFaces(frameBitmap: Bitmap): List<Pair<Bitmap, Rect>> =
         withContext(Dispatchers.IO) {
@@ -126,6 +121,15 @@ class FaceDetector(private val context: Context) {
                 (rect.left + rect.width()) <= width &&
                 (rect.top + rect.height()) <= height
     }
+
+    private fun validateRect(
+        cameraFrameBitmap: Bitmap,
+        boundingBox: Rect,
+    ): Boolean =
+        boundingBox.left >= 0 &&
+                boundingBox.top >= 0 &&
+                (boundingBox.left + boundingBox.width()) < cameraFrameBitmap.width &&
+                (boundingBox.top + boundingBox.height()) < cameraFrameBitmap.height
 
     private fun getBitmapFromUri(context: Context, imageUri: Uri): Bitmap? {
         context.contentResolver.openInputStream(imageUri)?.use { inputStream ->
