@@ -3,6 +3,7 @@
     "name": "expo-face-recognition-example",
     "slug": "expo-face-recognition-example",
     "version": "1.0.0",
+    "scheme": "face-rec-example",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -29,7 +30,8 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-image-picker"
+      "expo-image-picker",
+      "expo-router"
     ]
   }
 }
