@@ -26,6 +26,7 @@ import kotlinx.coroutines.launch
 
 class FaceNet(val context: Context) {
 
+    private val model = "facenet_512.tflite"
     // Dedicated thread for TFLite GPU Delegate (Must run on same thread as init)
     private val dispatcher = Executors.newSingleThreadExecutor().asCoroutineDispatcher()
     private val scope = CoroutineScope(dispatcher)
@@ -38,6 +39,12 @@ class FaceNet(val context: Context) {
         
     init {
         scope.launch {
+            initializeInterpreter()
+        }
+    }
+    
+    suspend fun waitForInit() = withContext(dispatcher) {
+        if (interpreter == null) {
             initializeInterpreter()
         }
     }
@@ -63,7 +70,16 @@ class FaceNet(val context: Context) {
         }
         options.useXNNPACK = true
         options.useNNAPI = true
-        interpreter = Interpreter(FileUtil.loadMappedFile(context, "facenet_512.tflite"), options)
+        try {
+            interpreter = Interpreter(FileUtil.loadMappedFile(context, model), options)
+        } catch (e: Exception) {
+            // If GPU/NNAPI failed, use fresh CPU options
+            val cpuOptions = Interpreter.Options()
+            cpuOptions.numThreads = 4
+            cpuOptions.useXNNPACK = true
+            cpuOptions.useNNAPI = false
+            interpreter = Interpreter(FileUtil.loadMappedFile(context, model), cpuOptions)
+        }
     }
 
     private fun calculateFaceEmbedding(faceBitmap: Bitmap): FloatArray {

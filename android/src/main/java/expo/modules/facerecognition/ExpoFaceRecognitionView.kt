@@ -25,6 +25,7 @@ import expo.modules.facerecognition.domain.FaceNet
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.concurrent.Executors
 
 class ExpoFaceRecognitionView(context: Context, appContext: AppContext) : ExpoView(context, appContext), DefaultLifecycleObserver {
@@ -46,6 +47,8 @@ class ExpoFaceRecognitionView(context: Context, appContext: AppContext) : ExpoVi
     private val faceNet = FaceNet(context)
 
     private var isProcessing = false
+
+    private var isModelsInitialized = false
 
     init {
         // Use PreviewView - handles lifecycle and surface scaling automatically
@@ -72,6 +75,21 @@ class ExpoFaceRecognitionView(context: Context, appContext: AppContext) : ExpoVi
             // Also trigger requestLayout to bubble up to RN
             requestLayout() 
         }
+
+        // Wait for models to load before allowing camera start
+        scope.launch {
+            Log.d(TAG, "Waiting for models to initialize...")
+            faceNet.waitForInit()
+            isModelsInitialized = true
+            Log.d(TAG, "Models initialized.")
+            
+            // If we are already attached/resumed, start camera now
+            withContext(Dispatchers.Main) {
+                if (isAttachedToWindow && !isCameraStarted) {
+                    startCameraIfReady()
+                }
+            }
+        }
     }
 
     override fun onAttachedToWindow() {
@@ -95,6 +113,10 @@ class ExpoFaceRecognitionView(context: Context, appContext: AppContext) : ExpoVi
 
     private fun startCameraIfReady() {
         if (isCameraStarted) return
+        if (!isModelsInitialized) {
+            Log.d(TAG, "Camera start deferred - models not ready")
+            return
+        }
         
         val activity = appContext.activityProvider?.currentActivity
         if (activity == null) {
