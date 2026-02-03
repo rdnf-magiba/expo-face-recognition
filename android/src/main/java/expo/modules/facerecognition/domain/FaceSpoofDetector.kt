@@ -20,7 +20,11 @@ class FaceSpoofDetector(context: Context) {
     private val interpreter2: Interpreter
     private val imageProcessor = ImageProcessor.Builder().add(CastOp(DataType.FLOAT32)).build()
     init {
-        val options = Interpreter.Options().apply { numThreads = 4 }
+        val options = Interpreter.Options().apply {
+            numThreads = 4
+            useXNNPACK = false
+            useNNAPI = false
+        }
         // Ensure these files are in your assets folder!
         interpreter1 = Interpreter(FileUtil.loadMappedFile(context, "spoof_model_scale_2_7.tflite"), options)
         interpreter2 = Interpreter(FileUtil.loadMappedFile(context, "spoof_model_scale_4_0.tflite"), options)

@@ -78,6 +78,14 @@ export default function App() {
             {'isLive' in result && <Text style={result.isLive ? styles.success : styles.error}>Live: {result.isLive ? "YES" : "NO"}</Text>}
             {'spoofScore' in result && <Text style={styles.label}>Spoof Score: {result.spoofScore?.toFixed(3)}</Text>}
             {'embedding' in result && <Text style={styles.label}>Embedding Size: {result.embedding?.length}</Text>}
+            {'duration' in result && (
+              <View style={styles.timings}>
+                <Text style={styles.timingText}>Detection: {result.duration.detection}ms</Text>
+                <Text style={styles.timingText}>Spoof: {result.duration.spoof}ms</Text>
+                <Text style={styles.timingText}>Embedding: {result.duration.embedding}ms</Text>
+                <Text style={[styles.timingText, { fontWeight: 'bold' }]}>Total: {result.duration.total}ms</Text>
+              </View>
+            )}
             {'error' in result && <Text style={styles.error}>{result.error}</Text>}
           </View>
         )}
@@ -126,6 +134,17 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 16,
     marginBottom: 5,
+  },
+  timings: {
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
+  },
+  timingText: {
+    fontSize: 14,
+    color: '#555',
+    marginBottom: 2,
   },
   success: {
     color: 'green',

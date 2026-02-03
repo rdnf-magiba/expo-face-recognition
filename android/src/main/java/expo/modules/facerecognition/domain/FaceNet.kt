@@ -14,32 +14,51 @@ import org.tensorflow.lite.support.image.ops.ResizeOp
 import org.tensorflow.lite.support.tensorbuffer.TensorBuffer
 import org.tensorflow.lite.support.tensorbuffer.TensorBufferFloat
 
+import org.tensorflow.lite.gpu.GpuDelegate
 
-class FaceNet(context: Context) {
+import java.util.concurrent.Executors
+import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.withContext
+import org.tensorflow.lite.gpu.CompatibilityList
 
-    private val interpreter: Interpreter
+class FaceNet(val context: Context) {
+
+    // Dedicated thread for TFLite GPU Delegate (Must run on same thread as init)
+    private val dispatcher = Executors.newSingleThreadExecutor().asCoroutineDispatcher()
+    
+    private var interpreter: Interpreter? = null
     private val imageProcessor = ImageProcessor.Builder()
         .add(ResizeOp(160, 160, ResizeOp.ResizeMethod.BILINEAR)) // Input is 160x160
         .add(NormalizeOp())
         .build()
-    init {
-        val options = Interpreter.Options().apply { numThreads = 4 }
-        interpreter = Interpreter(FileUtil.loadMappedFile(context, "facenet_512.tflite"), options)
-    }
-
-    fun getFaceEmbeddingSync(faceBitmap: Bitmap): FloatArray {
-        return calculateFaceEmbedding(faceBitmap)
-    }
-
-    suspend fun getFaceEmbedding(faceBitmap: Bitmap): FloatArray = withContext(Dispatchers.Default) {
+        
+    suspend fun getFaceEmbedding(faceBitmap: Bitmap): FloatArray = withContext(dispatcher) {
+        if (interpreter == null) {
+            initializeInterpreter()
+        }
         return@withContext calculateFaceEmbedding(faceBitmap)
+    }
+
+    private fun initializeInterpreter() {
+        val options = Interpreter.Options()
+        try {
+            if (CompatibilityList().isDelegateSupportedOnThisDevice) {
+                options.addDelegate(GpuDelegate(CompatibilityList().bestOptionsForThisDevice))
+            }
+        } catch (e: Exception) {
+            // Fallback to CPU if GPU delegate fails
+            options.numThreads = 4
+        }
+        options.useXNNPACK = true
+        options.useNNAPI = true
+        interpreter = Interpreter(FileUtil.loadMappedFile(context, "facenet_512.tflite"), options)
     }
 
     private fun calculateFaceEmbedding(faceBitmap: Bitmap): FloatArray {
         val tensorImage = imageProcessor.process(TensorImage.fromBitmap(faceBitmap))
         val outputBuffer = TensorBufferFloat.createFixedSize(intArrayOf(1, 512), DataType.FLOAT32)
-        interpreter.run(tensorImage.buffer, outputBuffer.buffer.rewind())
-        return outputBuffer.floatArray;
+        interpreter?.run(tensorImage.buffer, outputBuffer.buffer.rewind())
+        return outputBuffer.floatArray
     }
 
     class NormalizeOp : TensorOperator {

@@ -184,14 +184,22 @@ class ExpoFaceRecognitionView(context: Context, appContext: AppContext) : ExpoVi
             val rotation = imageProxy.imageInfo.rotationDegrees.toFloat()
             val rotatedBitmap = rotateBitmap(bitmap, rotation)
             
-            val result = faceDetector.detectFace(rotatedBitmap)
+            val startTime = System.currentTimeMillis()
+            
+            var result: Pair<Bitmap, android.graphics.Rect>? = null
+            val detectionTime = kotlin.system.measureTimeMillis {
+                result = faceDetector.detectFace(rotatedBitmap)
+            }
 
             if (result != null) {
                 isProcessing = true
-                val (croppedBitmap, faceRect) = result
+                val (croppedBitmap, faceRect) = result!!
                 scope.launch {
                     try {
-                        val spoof = faceSpoof.detectSpoof(rotatedBitmap, faceRect)
+                        var spoof: expo.modules.facerecognition.domain.FaceSpoofDetector.FaceSpoofResult? = null
+                        val spoofTime = kotlin.system.measureTimeMillis {
+                            spoof = faceSpoof.detectSpoof(rotatedBitmap, faceRect)
+                        }
 
                         val normalizedRect = getNormalizedFaceRect(
                             faceRect,
@@ -205,16 +213,29 @@ class ExpoFaceRecognitionView(context: Context, appContext: AppContext) : ExpoVi
                         val resultMap = mutableMapOf<String, Any>(
                             "success" to true,
                             "rect" to normalizedRect,
-                            "spoofScore" to spoof.score
+                            "spoofScore" to spoof!!.score
                         )
 
-                        if (spoof.isSpoof) {
+                        var embeddingTime = 0L
+                        if (spoof!!.isSpoof) {
                             resultMap["isLive"] = false
                         } else {
-                            val embedding = faceNet.getFaceEmbedding(croppedBitmap)
+                            var embedding: FloatArray
+                            embeddingTime = kotlin.system.measureTimeMillis {
+                                embedding = faceNet.getFaceEmbedding(croppedBitmap)
+                            }
                             resultMap["isLive"] = true
                             resultMap["embedding"] = embedding.toList()
                         }
+                        
+                        // Add timings
+                        resultMap["duration"] = mapOf(
+                            "detection" to detectionTime,
+                            "spoof" to spoofTime,
+                            "embedding" to embeddingTime,
+                            "total" to (System.currentTimeMillis() - startTime)
+                        )
+                        
                         onFaceDetected(resultMap)
                     } catch (e: Exception) {
                         Log.e(TAG, "Error processing", e)

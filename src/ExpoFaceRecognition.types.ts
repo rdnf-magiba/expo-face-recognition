@@ -5,12 +5,20 @@ export type FaceRect = {
   height: number;
 };
 
+export type FaceRecognitionDuration = {
+  detection: number;
+  spoof: number;
+  embedding: number;
+  total: number;
+};
+
 export type FaceRecognitionLiveResult = {
   success: true;
   isLive: true;
   embedding: number[];
   rect: FaceRect;
   spoofScore: number;
+  duration: FaceRecognitionDuration;
 };
 
 export type FaceRecognitionSpoofResult = {
@@ -18,6 +26,7 @@ export type FaceRecognitionSpoofResult = {
   isLive: false;
   spoofScore: number;
   rect: FaceRect;
+  duration: FaceRecognitionDuration;
 };
 
 export type FaceRecognitionFailureResult = {
