@@ -371,4 +371,7 @@ class ExpoFaceRecognitionView(context: Context, appContext: AppContext) : ExpoVi
         )
         layout(left, top, right, bottom)
     }
+    fun setIsGPUEnabled(enabled: Boolean) {
+        faceNet.setGpuEnabled(enabled)
+    }
 }

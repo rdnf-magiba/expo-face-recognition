@@ -5,6 +5,7 @@ import { FaceRecognitionResult } from './ExpoFaceRecognition.types';
 
 export type ExpoFaceRecognitionViewProps = {
     onFaceDetected?: (event: { nativeEvent: FaceRecognitionResult }) => void;
+    isGPUEnabled?: boolean;
 } & ViewProps;
 
 const NativeView: React.ComponentType<ExpoFaceRecognitionViewProps> | null =

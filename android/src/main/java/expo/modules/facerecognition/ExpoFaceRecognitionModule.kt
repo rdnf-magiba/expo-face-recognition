@@ -80,6 +80,9 @@ class ExpoFaceRecognitionModule : Module() {
 
         View(ExpoFaceRecognitionView::class) {
             Events("onFaceDetected")
+            Prop("isGPUEnabled") { view: ExpoFaceRecognitionView, isEnabled: Boolean ->
+                view.setIsGPUEnabled(isEnabled)
+            }
         }
     }
 }

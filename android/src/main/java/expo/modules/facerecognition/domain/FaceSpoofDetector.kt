@@ -24,8 +24,8 @@ class FaceSpoofDetector(context: Context) {
     init {
         val options = Interpreter.Options().apply {
             numThreads = 4
-            useXNNPACK = false
-            useNNAPI = false
+            useXNNPACK = true
+            useNNAPI = true
         }
         // Ensure these files are in your assets folder!
         interpreter1 = Interpreter(FileUtil.loadMappedFile(context, "spoof_model_scale_2_7.tflite"), options)
@@ -49,11 +49,14 @@ class FaceSpoofDetector(context: Context) {
         // Run Model 2
         val input2 = imageProcessor.process(TensorImage.fromBitmap(crop2)).buffer
         val output2 = arrayOf(FloatArray(3))
-        val time =
-            measureTime {
-                interpreter1.run(input1, output1)
-                interpreter2.run(input2, output2)
-            }.toLong(DurationUnit.MILLISECONDS)
+        val time = measureTime {
+            val t1 = Thread { interpreter1.run(input1, output1) }
+            val t2 = Thread { interpreter2.run(input2, output2) }
+            t1.start()
+            t2.start()
+            t1.join()
+            t2.join()
+        }.toLong(DurationUnit.MILLISECONDS)
         // Average Softmax
         val score1 = softMax(output1[0])
         val score2 = softMax(output2[0])

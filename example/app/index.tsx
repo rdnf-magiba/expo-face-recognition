@@ -13,6 +13,7 @@ export default function recognitionScreen() {
     const [hasPermission, setHasPermission] = useState(false);
     const [viewLayout, setViewLayout] = useState<LayoutRectangle | null>(null);
     const [isLiveMode, setIsLiveMode] = useState(true);
+    const [isGPUEnabled, setIsGPUEnabled] = useState(false); // Default CPU
     const [recognizedName, setRecognizedName] = useState<string | null>(null);
 
     useEffect(() => {
@@ -66,6 +67,7 @@ export default function recognitionScreen() {
             <ExpoFaceRecognitionView
                 style={styles.camera}
                 onFaceDetected={handleFaceDetected}
+                isGPUEnabled={isGPUEnabled}
                 onLayout={(event) => setViewLayout(event.nativeEvent.layout)}
             />
 
@@ -103,6 +105,7 @@ export default function recognitionScreen() {
                 <View style={styles.buttonRow}>
                     {!isLiveMode && <Button title="Resume Camera" onPress={resumeCamera} color="green" />}
                     <Button title="Register User" onPress={() => router.push('/register')} color="#2196F3" />
+                    <Button title={isGPUEnabled ? "GPU ON" : "GPU OFF"} onPress={() => setIsGPUEnabled(!isGPUEnabled)} color={isGPUEnabled ? "purple" : "gray"} />
                 </View>
 
                 {isLiveMode && <Text style={styles.headerText}>Real-Time Recognition ({users.length} users)</Text>}
@@ -114,7 +117,12 @@ export default function recognitionScreen() {
                         {'isLive' in result && <Text style={result.isLive ? styles.success : styles.error}>Live: {result.isLive ? "YES" : "NO"}</Text>}
                         {'spoofScore' in result && <Text style={styles.label}>Spoof Score: {result.spoofScore?.toFixed(3)}</Text>}
                         {'duration' in result && (
-                            <Text style={styles.timingText}>Time: {result.duration.total}ms</Text>
+                            <>
+                                <Text style={styles.timingText}>Detection: {result.duration.detection}ms</Text>
+                                <Text style={styles.timingText}>Embedding: {result.duration.embedding}ms</Text>
+                                <Text style={styles.timingText}>Spoof: {result.duration.spoof}ms</Text>
+                                <Text style={styles.timingText}>Total: {result.duration.detection + result.duration.embedding + result.duration.spoof}ms</Text>
+                            </>
                         )}
                         {'error' in result && <Text style={styles.error}>{result.error}</Text>}
                     </View>

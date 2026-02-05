@@ -9,7 +9,6 @@ export type FaceRecognitionDuration = {
   detection: number;
   spoof: number;
   embedding: number;
-  total: number;
 };
 
 export type FaceRecognitionLiveResult = {
