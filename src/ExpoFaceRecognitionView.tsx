@@ -1,11 +1,11 @@
 import { requireNativeViewManager } from 'expo-modules-core';
 import * as React from 'react';
 import { ViewProps, View, Text } from 'react-native';
-import { FaceRecognitionResult } from './ExpoFaceRecognition.types';
+import { FaceRecognitionResult, ModelLoadingStatus } from './ExpoFaceRecognition.types';
 
 export type ExpoFaceRecognitionViewProps = {
     onFaceDetected?: (event: { nativeEvent: FaceRecognitionResult }) => void;
-    onModelLoaded?: (event: { nativeEvent: { success: boolean } }) => void;
+    onModelStatus?: (event: { nativeEvent: { status: ModelLoadingStatus, error?: string } }) => void;
     isGPUEnabled?: boolean;
 } & ViewProps;
 

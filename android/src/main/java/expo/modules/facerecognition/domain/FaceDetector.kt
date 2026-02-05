@@ -27,48 +27,6 @@ class FaceDetector(private val context: Context) {
             .build()
     private val faceDetector = MPFaceDetector.createFromOptions(context, faceDetectorOptions)
 
-    fun detectFace(bitmap: Bitmap): Pair<Bitmap, Rect>? {
-        val mpImage = BitmapImageBuilder(bitmap).build()
-        val detectionResult = faceDetector.detect(mpImage)
-        val faces = detectionResult.detections()
-        
-        // Strict single face detection to match previous/requested behavior
-        if (faces.isEmpty() || faces.size > 1) {
-            return null
-        }
-        
-        val face = faces[0]
-        val rect = face.boundingBox().toRect()
-        
-        if (validateRect(bitmap.width, bitmap.height, rect)) {
-            val croppedBitmap =
-                Bitmap.createBitmap(
-                    bitmap,
-                    rect.left,
-                    rect.top,
-                    rect.width(),
-                    rect.height(),
-                )
-            return Pair(bitmap, rect)
-        }
-        return null
-    }
-
-    suspend fun detectFace(imageUri: Uri): Pair<Bitmap, Rect>? = withContext(Dispatchers.IO) {
-        val bitmap = getBitmapFromUri(context, imageUri) ?: return@withContext null
-        val mpImage = BitmapImageBuilder(bitmap).build()
-        val faces = faceDetector.detect(mpImage).detections()
-
-        if (faces.isEmpty() || faces.size > 1) {
-            return@withContext null
-        }
-        val rect = faces[0].boundingBox().toRect()
-        if (validateRect(bitmap.width, bitmap.height, rect)) {
-            return@withContext Pair(bitmap, rect)
-        }
-        return@withContext null
-    }
-
     fun getCroppedFaceSync(imageUri: Uri): Pair<Bitmap, Rect>? {
         val imageBitmap = getBitmapFromUri(context, imageUri) ?: return null
         val faces = faceDetector.detect(BitmapImageBuilder(imageBitmap).build()).detections()

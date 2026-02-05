@@ -22,6 +22,7 @@ import androidx.core.graphics.createBitmap
 import androidx.core.graphics.toRectF
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
+import expo.modules.core.logging.localizedMessageWithCauseLocalizedMessage
 import expo.modules.kotlin.AppContext
 import expo.modules.kotlin.viewevent.EventDispatcher
 import expo.modules.kotlin.views.ExpoView
@@ -36,6 +37,13 @@ import java.util.concurrent.Executors
 import kotlin.time.DurationUnit
 import kotlin.time.measureTimedValue
 
+enum class ModelLoadingStatus {
+    LOADING,
+    LOADED,
+    FAILED
+}
+
+
 @ExperimentalGetImage
 class ExpoFaceRecognitionView(context: Context, appContext: AppContext) : ExpoView(context, appContext), DefaultLifecycleObserver {
     
@@ -44,7 +52,8 @@ class ExpoFaceRecognitionView(context: Context, appContext: AppContext) : ExpoVi
     }
     
     private val onFaceDetected by EventDispatcher()
-    private val onModelLoaded by EventDispatcher()
+    private val onModelStatus by EventDispatcher()
+
     private var previewView: PreviewView? = null
     private val scope = CoroutineScope(Dispatchers.IO)
     
@@ -60,8 +69,6 @@ class ExpoFaceRecognitionView(context: Context, appContext: AppContext) : ExpoVi
     private var boundingBoxTransform: Matrix = Matrix()
     private var overlayWidth: Int = 0
     private var overlayHeight: Int = 0
-
-    private var isModelsInitialized = false
 
 
 //    NEW
@@ -122,10 +129,6 @@ class ExpoFaceRecognitionView(context: Context, appContext: AppContext) : ExpoVi
         // Wait for models to load before allowing camera start
         scope.launch {
             Log.d(TAG, "Waiting for models to initialize...")
-            faceNet.waitForInit()
-            isModelsInitialized = true
-            onModelLoaded(mapOf("success" to true))
-            Log.d(TAG, "Models initialized.")
 
             // If we are already attached/resumed, start camera now
             withContext(Dispatchers.Main) {
@@ -136,12 +139,23 @@ class ExpoFaceRecognitionView(context: Context, appContext: AppContext) : ExpoVi
         }
     }
 
+    fun setIsGPUEnabled(enabled: Boolean) {
+        scope.launch {
+            onModelStatus(mapOf("status" to ModelLoadingStatus.LOADING))
+            try {
+                faceNet.setGpuEnabled(enabled)
+                onModelStatus(mapOf("status" to ModelLoadingStatus.LOADED))
+                Log.d(TAG, "Models initialized.")
+            }
+            catch (e: Exception) {
+                onModelStatus(mapOf("status" to ModelLoadingStatus.FAILED, "error" to e.localizedMessage))
+                Log.d(TAG, "Models failed to load.")
+            }
+        }
+    }
+
     private fun startCameraIfReady() {
         if (isCameraStarted) return
-        if (!isModelsInitialized) {
-            Log.d(TAG, "Camera start deferred - models not ready")
-            return
-        }
 
         val activity = appContext.activityProvider?.currentActivity
         if (activity == null) {
@@ -220,7 +234,6 @@ class ExpoFaceRecognitionView(context: Context, appContext: AppContext) : ExpoVi
     private val imageAnalyser = ImageAnalysis.Analyzer { image ->
         processFeed(image)
     }
-
 
     private fun processFeed(image: ImageProxy) {
         if (isProcessing) {
@@ -371,11 +384,5 @@ class ExpoFaceRecognitionView(context: Context, appContext: AppContext) : ExpoVi
             MeasureSpec.makeMeasureSpec(height, MeasureSpec.EXACTLY)
         )
         layout(left, top, right, bottom)
-    }
-    fun setIsGPUEnabled(enabled: Boolean) {
-        scope.launch {
-            faceNet.setGpuEnabled(enabled)
-            onModelLoaded(mapOf("success" to true))
-        }
     }
 }

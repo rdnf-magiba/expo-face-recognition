@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { StyleSheet, Text, View, PermissionsAndroid, LayoutRectangle, Button, TouchableOpacity } from 'react-native';
-import { ExpoFaceRecognitionView, FaceRecognitionResult, processFace } from 'expo-face-recognition';
+import { ExpoFaceRecognitionView, FaceRecognitionResult, ModelLoadingStatus, processFace } from 'expo-face-recognition';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { useUser } from '../components/UserContext';
@@ -13,7 +13,7 @@ export default function recognitionScreen() {
     const [hasPermission, setHasPermission] = useState(false);
     const [viewLayout, setViewLayout] = useState<LayoutRectangle | null>(null);
     const [isLiveMode, setIsLiveMode] = useState(true);
-    const [isGPUEnabled, setIsGPUEnabled] = useState(false); // Default CPU
+    const [isGPUEnabled, setIsGPUEnabled] = useState(true); // Default CPU
     const [isModelLoaded, setIsModelLoaded] = useState(false);
     const [recognizedName, setRecognizedName] = useState<string | null>(null);
 
@@ -55,8 +55,11 @@ export default function recognitionScreen() {
         }
     };
 
-    const handleModelLoaded = () => {
-        setIsModelLoaded(true);
+    const handleModelStatus = ({ nativeEvent }: { nativeEvent: { status: ModelLoadingStatus, error?: string } }) => {
+        console.log(nativeEvent)
+        if (nativeEvent.status === ModelLoadingStatus.LOADED) {
+            setIsModelLoaded(true);
+        }
     };
 
     const resumeCamera = () => {
@@ -84,7 +87,7 @@ export default function recognitionScreen() {
             <ExpoFaceRecognitionView
                 style={styles.camera}
                 onFaceDetected={handleFaceDetected}
-                onModelLoaded={handleModelLoaded}
+                onModelStatus={handleModelStatus}
                 isGPUEnabled={isGPUEnabled}
                 onLayout={(event) => setViewLayout(event.nativeEvent.layout)}
             />
@@ -126,8 +129,6 @@ export default function recognitionScreen() {
                     <Button
                         title={isGPUEnabled ? "GPU ON" : "GPU OFF"}
                         onPress={toggleGPU}
-                        color={isGPUEnabled ? "purple" : "gray"}
-                        disabled={!isModelLoaded}
                     />
                 </View>
 

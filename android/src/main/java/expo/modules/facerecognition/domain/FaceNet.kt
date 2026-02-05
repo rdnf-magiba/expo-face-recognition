@@ -4,7 +4,6 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.util.Log
 import expo.modules.core.logging.localizedMessageWithCauseLocalizedMessage
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.tensorflow.lite.DataType
 import org.tensorflow.lite.Interpreter
@@ -20,47 +19,29 @@ import org.tensorflow.lite.gpu.GpuDelegate
 
 import java.util.concurrent.Executors
 import kotlinx.coroutines.asCoroutineDispatcher
-import kotlinx.coroutines.withContext
 import org.tensorflow.lite.gpu.CompatibilityList
 
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.launch
 
 class FaceNet(val context: Context) {
 
+    private var useGpu = false
     private val model = "facenet_512.tflite"
-    // Dedicated thread for TFLite GPU Delegate (Must run on same thread as init)
+
     private val dispatcher = Executors.newSingleThreadExecutor().asCoroutineDispatcher()
-    private val scope = CoroutineScope(dispatcher)
-    
+
     private var interpreter: Interpreter? = null
     private val imageProcessor = ImageProcessor.Builder()
         .add(ResizeOp(160, 160, ResizeOp.ResizeMethod.BILINEAR)) // Input is 160x160
         .add(NormalizeOp())
         .build()
         
-    init {
-        scope.launch {
-            initializeInterpreter()
-        }
-    }
-    
-    suspend fun waitForInit() = withContext(dispatcher) {
-        if (interpreter == null) {
-            initializeInterpreter()
-        }
-    }
-        
     suspend fun getFaceEmbedding(faceBitmap: Bitmap): FloatArray = withContext(dispatcher) {
         if (interpreter == null) {
-            // Should have been initialized by init block, but if failed or slow, retry here.
-            // Since this runs on the same single-threaded dispatcher, it waits for init to finish naturally.
-            initializeInterpreter() 
+            initializeInterpreter()
         }
         return@withContext calculateFaceEmbedding(faceBitmap)
     }
 
-    private var useGpu = false
 
     suspend fun setGpuEnabled(enabled: Boolean) = withContext(dispatcher) {
         if (useGpu != enabled) {
@@ -89,7 +70,6 @@ class FaceNet(val context: Context) {
                 }
             }
         } catch (e: Exception) {
-            // GPU failed → keep CPU defaults
             Log.e("FaceNet", e.localizedMessageWithCauseLocalizedMessage())
         }
 

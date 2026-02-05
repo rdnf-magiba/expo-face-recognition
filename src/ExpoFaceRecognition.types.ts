@@ -37,3 +37,9 @@ export type FaceRecognitionResult =
   | FaceRecognitionLiveResult
   | FaceRecognitionSpoofResult
   | FaceRecognitionFailureResult;
+
+export enum ModelLoadingStatus {
+  LOADING = "LOADING",
+  LOADED = "LOADED",
+  FAILED = "FAILED",
+}
