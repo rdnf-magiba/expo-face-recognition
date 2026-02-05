@@ -62,12 +62,10 @@ class FaceNet(val context: Context) {
 
     private var useGpu = false
 
-    fun setGpuEnabled(enabled: Boolean) {
+    suspend fun setGpuEnabled(enabled: Boolean) = withContext(dispatcher) {
         if (useGpu != enabled) {
             useGpu = enabled
-            scope.launch {
-                initializeInterpreter()
-            }
+            initializeInterpreter()
         }
     }
 
@@ -83,6 +81,8 @@ class FaceNet(val context: Context) {
             if (useGpu) {
                 val compat = CompatibilityList()
                 if (compat.isDelegateSupportedOnThisDevice) {
+                    options.useNNAPI = false
+                    options.useXNNPACK = false
                     options.addDelegate(
                         GpuDelegate(compat.bestOptionsForThisDevice)
                     )
@@ -93,16 +93,7 @@ class FaceNet(val context: Context) {
             Log.e("FaceNet", e.localizedMessageWithCauseLocalizedMessage())
         }
 
-        try {
-            interpreter = Interpreter(FileUtil.loadMappedFile(context, model), options)
-        } catch (e: Exception) {
-            // If GPU/NNAPI failed, use fresh CPU options
-            val cpuOptions = Interpreter.Options()
-            cpuOptions.numThreads = 4
-            cpuOptions.useXNNPACK = true
-            cpuOptions.useNNAPI = false
-            interpreter = Interpreter(FileUtil.loadMappedFile(context, model), cpuOptions)
-        }
+        interpreter = Interpreter(FileUtil.loadMappedFile(context, model), options)
     }
 
     private fun calculateFaceEmbedding(faceBitmap: Bitmap): FloatArray {

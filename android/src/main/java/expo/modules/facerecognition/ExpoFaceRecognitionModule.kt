@@ -79,7 +79,7 @@ class ExpoFaceRecognitionModule : Module() {
         }
 
         View(ExpoFaceRecognitionView::class) {
-            Events("onFaceDetected")
+            Events("onFaceDetected", "onModelLoaded")
             Prop("isGPUEnabled") { view: ExpoFaceRecognitionView, isEnabled: Boolean ->
                 view.setIsGPUEnabled(isEnabled)
             }

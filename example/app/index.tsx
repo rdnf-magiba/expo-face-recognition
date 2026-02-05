@@ -14,6 +14,7 @@ export default function recognitionScreen() {
     const [viewLayout, setViewLayout] = useState<LayoutRectangle | null>(null);
     const [isLiveMode, setIsLiveMode] = useState(true);
     const [isGPUEnabled, setIsGPUEnabled] = useState(false); // Default CPU
+    const [isModelLoaded, setIsModelLoaded] = useState(false);
     const [recognizedName, setRecognizedName] = useState<string | null>(null);
 
     useEffect(() => {
@@ -54,19 +55,36 @@ export default function recognitionScreen() {
         }
     };
 
+    const handleModelLoaded = () => {
+        setIsModelLoaded(true);
+    };
+
     const resumeCamera = () => {
         setIsLiveMode(true);
         setResult(null);
         setRecognizedName(null);
     };
 
+    const toggleGPU = () => {
+        setIsModelLoaded(false); // Show loading while switching
+        setIsGPUEnabled(!isGPUEnabled);
+    };
+
     if (!hasPermission) return <View style={styles.container}><Text style={styles.headerText}>No Camera Permission</Text></View>;
 
     return (
         <View style={styles.container}>
+            {/* Loading Overlay */}
+            {!isModelLoaded && hasPermission && (
+                <View style={[styles.faceBox, { top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.5)', borderWidth: 0, zIndex: 100 }]}>
+                    <Text style={{ color: 'white', fontSize: 24, fontWeight: 'bold' }}>Loading Models...</Text>
+                </View>
+            )}
+
             <ExpoFaceRecognitionView
                 style={styles.camera}
                 onFaceDetected={handleFaceDetected}
+                onModelLoaded={handleModelLoaded}
                 isGPUEnabled={isGPUEnabled}
                 onLayout={(event) => setViewLayout(event.nativeEvent.layout)}
             />
@@ -105,7 +123,12 @@ export default function recognitionScreen() {
                 <View style={styles.buttonRow}>
                     {!isLiveMode && <Button title="Resume Camera" onPress={resumeCamera} color="green" />}
                     <Button title="Register User" onPress={() => router.push('/register')} color="#2196F3" />
-                    <Button title={isGPUEnabled ? "GPU ON" : "GPU OFF"} onPress={() => setIsGPUEnabled(!isGPUEnabled)} color={isGPUEnabled ? "purple" : "gray"} />
+                    <Button
+                        title={isGPUEnabled ? "GPU ON" : "GPU OFF"}
+                        onPress={toggleGPU}
+                        color={isGPUEnabled ? "purple" : "gray"}
+                        disabled={!isModelLoaded}
+                    />
                 </View>
 
                 {isLiveMode && <Text style={styles.headerText}>Real-Time Recognition ({users.length} users)</Text>}

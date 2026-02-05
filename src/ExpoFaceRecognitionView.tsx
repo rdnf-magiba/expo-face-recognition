@@ -5,6 +5,7 @@ import { FaceRecognitionResult } from './ExpoFaceRecognition.types';
 
 export type ExpoFaceRecognitionViewProps = {
     onFaceDetected?: (event: { nativeEvent: FaceRecognitionResult }) => void;
+    onModelLoaded?: (event: { nativeEvent: { success: boolean } }) => void;
     isGPUEnabled?: boolean;
 } & ViewProps;
 

@@ -44,6 +44,7 @@ class ExpoFaceRecognitionView(context: Context, appContext: AppContext) : ExpoVi
     }
     
     private val onFaceDetected by EventDispatcher()
+    private val onModelLoaded by EventDispatcher()
     private var previewView: PreviewView? = null
     private val scope = CoroutineScope(Dispatchers.IO)
     
@@ -123,6 +124,7 @@ class ExpoFaceRecognitionView(context: Context, appContext: AppContext) : ExpoVi
             Log.d(TAG, "Waiting for models to initialize...")
             faceNet.waitForInit()
             isModelsInitialized = true
+            onModelLoaded(mapOf("success" to true))
             Log.d(TAG, "Models initialized.")
 
             // If we are already attached/resumed, start camera now
@@ -221,7 +223,6 @@ class ExpoFaceRecognitionView(context: Context, appContext: AppContext) : ExpoVi
 
 
     private fun processFeed(image: ImageProxy) {
-        Log.i("ImageAnalyser", "Image received")
         if (isProcessing) {
             image.close()
             return
@@ -372,6 +373,9 @@ class ExpoFaceRecognitionView(context: Context, appContext: AppContext) : ExpoVi
         layout(left, top, right, bottom)
     }
     fun setIsGPUEnabled(enabled: Boolean) {
-        faceNet.setGpuEnabled(enabled)
+        scope.launch {
+            faceNet.setGpuEnabled(enabled)
+            onModelLoaded(mapOf("success" to true))
+        }
     }
 }
