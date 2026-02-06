@@ -25,13 +25,15 @@ import org.tensorflow.lite.gpu.CompatibilityList
 class FaceNet(val context: Context) {
 
     private var useGpu = false
+    // private val model = "mobilefacenet.tflite"
     private val model = "facenet_512.tflite"
 
     private val dispatcher = Executors.newSingleThreadExecutor().asCoroutineDispatcher()
 
     private var interpreter: Interpreter? = null
     private val imageProcessor = ImageProcessor.Builder()
-        .add(ResizeOp(160, 160, ResizeOp.ResizeMethod.BILINEAR)) // Input is 160x160
+        // .add(ResizeOp(112, 112, ResizeOp.ResizeMethod.BILINEAR)) // For MobileFaceNet
+        .add(ResizeOp(160, 160, ResizeOp.ResizeMethod.BILINEAR)) // For Facenet 512
         .add(NormalizeOp())
         .build()
         
@@ -85,7 +87,8 @@ class FaceNet(val context: Context) {
 
     class NormalizeOp : TensorOperator {
         override fun apply(buffer: TensorBuffer?): TensorBuffer {
-            val pixels = buffer!!.floatArray.map { it / 255f }.toFloatArray()
+            // val pixels = buffer!!.floatArray.map { (it - 127.5f) / 128.0f }.toFloatArray() // For MobileFaceNet
+            val pixels = buffer!!.floatArray.map { (it) / 255.0f }.toFloatArray() // For Facenet 512
             val output = TensorBufferFloat.createFixedSize(buffer.shape, DataType.FLOAT32)
             output.loadArray(pixels)
             return output

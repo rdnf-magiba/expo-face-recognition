@@ -68,7 +68,8 @@ def models = [
     "facenet.tflite": "https://github.com/rdnf-magiba/expo-face-recognition/releases/download/models/facenet.tflite",
     "facenet_512.tflite": "https://github.com/rdnf-magiba/expo-face-recognition/releases/download/models/facenet_512.tflite",
     "spoof_model_scale_2_7.tflite": "https://github.com/rdnf-magiba/expo-face-recognition/releases/download/models/spoof_model_scale_2_7.tflite",
-    "spoof_model_scale_4_0.tflite": "https://github.com/rdnf-magiba/expo-face-recognition/releases/download/models/spoof_model_scale_4_0.tflite"
+    "spoof_model_scale_4_0.tflite": "https://github.com/rdnf-magiba/expo-face-recognition/releases/download/models/spoof_model_scale_4_0.tflite",
+    "mobilefacenet.tflite": "https://github.com/rdnf-magiba/expo-face-recognition/releases/download/models/mobilefacenet.tflite",
 ]
 
 task downloadModels {
