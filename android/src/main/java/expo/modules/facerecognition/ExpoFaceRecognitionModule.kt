@@ -14,6 +14,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import androidx.core.net.toUri
+import expo.modules.facerecognition.domain.FaceAnalysisResult
 
 class ExpoFaceRecognitionModule : Module() {
     // Each module class must implement the definition function. The definition consists of components
@@ -41,7 +42,7 @@ class ExpoFaceRecognitionModule : Module() {
                     var detectionTime = 0L
                     var embeddingTime = 0L
                     
-                    var detection: Pair<Bitmap, android.graphics.Rect>? = null
+                    var detection: FaceAnalysisResult? = null
                     detectionTime = kotlin.system.measureTimeMillis {
                         detection = faceDetector.getCroppedFaceSync(imageUri.toUri())
                     }
@@ -50,7 +51,8 @@ class ExpoFaceRecognitionModule : Module() {
                         promise.resolve(mapOf("success" to false, "error" to "No face detected"))
                         return@launch
                     }
-                    val (croppedFace, faceRect) = detection
+                    val croppedFace = detection!!.bitmap
+                    val faceRect = detection!!.rect
 
                     val resultMap = mutableMapOf<String, Any>(
                         "success" to true,

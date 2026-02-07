@@ -14,6 +14,17 @@ import com.google.mediapipe.tasks.vision.core.RunningMode
 import com.google.mediapipe.tasks.vision.facedetector.FaceDetector as MPFaceDetector
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.util.Optional
+import kotlin.math.atan2
+import kotlin.math.abs
+import kotlin.math.PI
+
+data class FaceAnalysisResult(
+    val bitmap: Bitmap,
+    val rect: Rect,
+    val yaw: Float,
+    val roll: Float
+)
 
 class FaceDetector(private val context: Context) {
     // The model is stored in the assets folder
@@ -27,7 +38,7 @@ class FaceDetector(private val context: Context) {
             .build()
     private val faceDetector = MPFaceDetector.createFromOptions(context, faceDetectorOptions)
 
-    fun getCroppedFaceSync(imageUri: Uri): Pair<Bitmap, Rect>? {
+    fun getCroppedFaceSync(imageUri: Uri): FaceAnalysisResult? {
         val imageBitmap = getBitmapFromUri(context, imageUri) ?: return null
         val faces = faceDetector.detect(BitmapImageBuilder(imageBitmap).build()).detections()
         if (faces.size > 1) {
@@ -37,7 +48,8 @@ class FaceDetector(private val context: Context) {
         } else {
             // Validate the bounding box and
             // return the cropped face
-            val rect = faces[0].boundingBox().toRect()
+            val detection = faces[0]
+            val rect = detection.boundingBox().toRect()
             if (validateRect(imageBitmap, rect)) {
                 val croppedBitmap =
                     Bitmap.createBitmap(
@@ -47,21 +59,22 @@ class FaceDetector(private val context: Context) {
                         rect.width(),
                         rect.height()
                     )
-                return Pair(croppedBitmap, rect)
+                val (yaw, roll) = calculateOrientation(detection.keypoints(), imageBitmap.width, imageBitmap.height)
+                return FaceAnalysisResult(croppedBitmap, rect, yaw, roll)
             } else {
                 return null
             }
         }
     }
 
-    suspend fun getAllCroppedFaces(frameBitmap: Bitmap): List<Pair<Bitmap, Rect>> =
+    suspend fun getAllCroppedFaces(frameBitmap: Bitmap): List<FaceAnalysisResult> =
         withContext(Dispatchers.IO) {
             return@withContext faceDetector
                 .detect(BitmapImageBuilder(frameBitmap).build())
                 .detections()
                 .filter { validateRect(frameBitmap.width, frameBitmap.height, it.boundingBox().toRect()) }
-                .map { detection -> detection.boundingBox().toRect() }
-                .map { rect ->
+                .map { detection -> 
+                    val rect = detection.boundingBox().toRect()
                     val croppedBitmap =
                         Bitmap.createBitmap(
                             frameBitmap,
@@ -70,9 +83,44 @@ class FaceDetector(private val context: Context) {
                             rect.width(),
                             rect.height(),
                         )
-                    Pair(croppedBitmap, rect)
+                    val (yaw, roll) = calculateOrientation(detection.keypoints(), frameBitmap.width, frameBitmap.height)
+                    FaceAnalysisResult(croppedBitmap, rect, yaw, roll)
                 }
         }
+
+    // Returns Yaw, Roll in degrees
+    private fun calculateOrientation(keypointsOpt: Optional<MutableList<com.google.mediapipe.tasks.components.containers.NormalizedKeypoint>>, imgW: Int, imgH: Int): Pair<Float, Float> {
+        if (!keypointsOpt.isPresent) return Pair(0f, 0f)
+        val keypoints = keypointsOpt.get()
+        if (keypoints.size < 2) return Pair(0f, 0f)
+
+        // 0: Right Eye, 1: Left Eye
+        val rightEye = keypoints[0]
+        val leftEye = keypoints[1]
+        
+        // Roll: Angle of line between eyes
+        val dy = (leftEye.y() - rightEye.y()) * imgH
+        val dx = (leftEye.x() - rightEye.x()) * imgW
+        val rollRad = atan2(dy, dx)
+        val rollDeg = Math.toDegrees(rollRad.toDouble()).toFloat()
+
+        // Yaw: Nose deviation from center of eyes
+        // Using approximate geometric heuristics
+        var yawDeg = 0f
+        if (keypoints.size > 2) {
+             val nose = keypoints[2]
+             val midEyeX = (leftEye.x() + rightEye.x()) / 2f
+             // Distance between eyes
+             val eyeDist = abs(leftEye.x() - rightEye.x())
+             if (eyeDist > 0) {
+                 val deviation = (nose.x() - midEyeX) / eyeDist
+                 // Emperical multiplier to map ratio to degrees roughly
+                 yawDeg = deviation * 90f 
+             }
+        }
+        
+        return Pair(yawDeg, rollDeg)
+    }
 
     private fun validateRect(width: Int, height: Int, rect: Rect): Boolean {
         return rect.left >= 0 && rect.top >= 0 &&

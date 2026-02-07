@@ -29,13 +29,17 @@ import expo.modules.kotlin.views.ExpoView
 import expo.modules.facerecognition.domain.FaceDetector
 import expo.modules.facerecognition.domain.FaceSpoofDetector
 import expo.modules.facerecognition.domain.FaceNet
+import expo.modules.facerecognition.domain.FaceAnalysisResult
 import kotlinx.coroutines.CoroutineScope
+import kotlin.math.abs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.concurrent.Executors
 import kotlin.time.DurationUnit
 import kotlin.time.measureTimedValue
+import java.util.ArrayDeque
+import kotlin.math.sqrt
 
 enum class ModelLoadingStatus {
     LOADING,
@@ -69,6 +73,13 @@ class ExpoFaceRecognitionView(context: Context, appContext: AppContext) : ExpoVi
     private var boundingBoxTransform: Matrix = Matrix()
     private var overlayWidth: Int = 0
     private var overlayHeight: Int = 0
+
+    // Stability tracking
+    private val faceCenterHistory = ArrayDeque<Pair<Float, Float>>()
+    private val STABILITY_WINDOW = 5
+    // Threshold for standard deviation in normalized coordinates (0.0 - 1.0)
+    // 0.005 means 0.5% variance allowed
+    private val STABILITY_THRESHOLD = 0.005
 
 
 //    NEW
@@ -288,15 +299,51 @@ class ExpoFaceRecognitionView(context: Context, appContext: AppContext) : ExpoVi
             }
 
             for (result in faceDetectionResult) {
-                val (croppedBitmap, boundingBox) = result
+                val croppedBitmap = result.bitmap
+                val boundingBox = result.rect
+                val yaw = result.yaw
+                val roll = result.roll
 
                 val spoofResult = faceSpoof.detectSpoof(frameBitmap, boundingBox)
 
+                val normRect = getNormalizedFaceRect(boundingBox, image.height.toFloat(), image.width.toFloat(), width.toFloat(), height.toFloat())
+                
                 val resultMap = mutableMapOf<String, Any>(
                     "success" to true,
                     "isLive" to true,
-                    "rect" to getNormalizedFaceRect(boundingBox, image.height.toFloat(), image.width.toFloat(), width.toFloat(), height.toFloat())
+                    "rect" to normRect
                 )
+
+                val isStraight = abs(yaw) < 12 && abs(roll) < 12
+                resultMap["isStraight"] = isStraight
+                resultMap["yaw"] = yaw
+                resultMap["roll"] = roll
+
+                // Stability Check
+                var isStable = false
+                if (faceDetectionResult.size == 1) {
+                    val cx = (normRect["x"] ?: 0f) + (normRect["width"] ?: 0f) / 2f
+                    val cy = (normRect["y"] ?: 0f) + (normRect["height"] ?: 0f) / 2f
+                    
+                    if (faceCenterHistory.size >= STABILITY_WINDOW) {
+                        faceCenterHistory.removeFirst()
+                    }
+                    faceCenterHistory.add(cx to cy)
+
+                    if (faceCenterHistory.size >= STABILITY_WINDOW) {
+                        val avgX = faceCenterHistory.map { it.first }.average()
+                        val avgY = faceCenterHistory.map { it.second }.average()
+                        val devX = sqrt(faceCenterHistory.map { (it.first - avgX).let { d -> d * d } }.average())
+                        val devY = sqrt(faceCenterHistory.map { (it.second - avgY).let { d -> d * d } }.average())
+                        
+                        if (devX < STABILITY_THRESHOLD && devY < STABILITY_THRESHOLD) {
+                            isStable = true
+                        }
+                    }
+                } else {
+                    faceCenterHistory.clear()
+                }
+                resultMap["isStable"] = isStable
 
                 if (spoofResult.isSpoof) {
                     resultMap["isLive"] = false

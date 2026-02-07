@@ -14,6 +14,10 @@ export type FaceRecognitionDuration = {
 export type FaceRecognitionLiveResult = {
   success: true;
   isLive: true;
+  isStable: boolean;
+  isStraight: boolean;
+  yaw: number;
+  roll: number;
   embedding: number[];
   rect: FaceRect;
   spoofScore: number;
@@ -23,6 +27,10 @@ export type FaceRecognitionLiveResult = {
 export type FaceRecognitionSpoofResult = {
   success: true;
   isLive: false;
+  isStable: boolean;
+  isStraight: boolean;
+  yaw: number;
+  roll: number;
   spoofScore: number;
   rect: FaceRect;
   duration: FaceRecognitionDuration;
