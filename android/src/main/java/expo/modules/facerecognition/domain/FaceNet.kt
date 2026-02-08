@@ -58,7 +58,7 @@ class FaceNet(val context: Context) {
         val options = Interpreter.Options().apply {
             numThreads = 4          // default CPU fallback
             useXNNPACK = true
-            useNNAPI = true
+            useNNAPI = false
         }
         try {
             if (useGpu) {
