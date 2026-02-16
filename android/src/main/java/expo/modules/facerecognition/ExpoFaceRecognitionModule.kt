@@ -14,6 +14,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import androidx.core.net.toUri
+import expo.modules.facerecognition.domain.SpecsDetector
+import kotlin.time.measureTimedValue
 
 class ExpoFaceRecognitionModule : Module() {
     // Each module class must implement the definition function. The definition consists of components
@@ -23,7 +25,8 @@ class ExpoFaceRecognitionModule : Module() {
     private val context: Context
         get() = appContext.reactContext ?: throw IllegalStateException("React Context null")
     private val faceDetector by lazy { FaceDetector(context) }
-    private val faceSpoof by lazy { FaceSpoofDetector(context) }
+    private val specsDetector by lazy { SpecsDetector(context) }
+
     private val faceNet by lazy { FaceNet(context) }
     private val scope = CoroutineScope(Dispatchers.IO)
 
@@ -57,6 +60,20 @@ class ExpoFaceRecognitionModule : Module() {
                         "rect" to faceRect,
                     )
 
+                    val (output, time) = measureTimedValue{  specsDetector.detectSpecs(croppedFace)[0] }
+                    if (output > 0.5) {
+                        resultMap["isLive"] = true
+                        resultMap["isWearingGlasses"] = true
+                        resultMap["duration"] = mapOf(
+                            "detection" to detectionTime,
+                            "glass" to time,
+                            "total" to (System.currentTimeMillis() - startTime)
+                        )
+                        promise.resolve(resultMap)
+                        return@launch
+                    }
+
+
                         // 2. Get Embedding
                     var embedding: FloatArray
                     embeddingTime = kotlin.system.measureTimeMillis {
@@ -64,7 +81,6 @@ class ExpoFaceRecognitionModule : Module() {
                     }
                     resultMap["isLive"] = true
                     resultMap["embedding"] = embedding.toList()
-
                     resultMap["duration"] = mapOf(
                         "detection" to detectionTime,
                         "embedding" to embeddingTime,

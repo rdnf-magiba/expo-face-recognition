@@ -8,22 +8,31 @@ export type FaceRect = {
 export type FaceRecognitionDuration = {
   detection: number;
   spoof: number;
-  embedding: number;
+  glass?: number;
+  embedding?: number;
 };
 
-export type FaceRecognitionLiveResult = {
+export type FaceRecognitionWearingGlassesResult = {
   success: true;
   isLive: true;
+  isWearingGlasses: true;
+  rect: FaceRect;
+  duration: FaceRecognitionDuration;
+};
+
+export type FaceRecognitionNotWearingGlassesResult = {
+  success: true;
+  isLive: true;
+  isWearingGlasses: false;
   embedding: number[];
   rect: FaceRect;
-  spoofScore: number;
   duration: FaceRecognitionDuration;
 };
 
 export type FaceRecognitionSpoofResult = {
   success: true;
   isLive: false;
-  spoofScore: number;
+  isWearingGlasses?: boolean;
   rect: FaceRect;
   duration: FaceRecognitionDuration;
 };
@@ -34,7 +43,8 @@ export type FaceRecognitionFailureResult = {
 };
 
 export type FaceRecognitionResult =
-  | FaceRecognitionLiveResult
+  | FaceRecognitionWearingGlassesResult
+  | FaceRecognitionNotWearingGlassesResult
   | FaceRecognitionSpoofResult
   | FaceRecognitionFailureResult;
 

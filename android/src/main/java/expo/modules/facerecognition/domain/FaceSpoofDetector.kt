@@ -32,10 +32,6 @@ class FaceSpoofDetector(context: Context) {
         interpreter2 = Interpreter(FileUtil.loadMappedFile(context, "spoof_model_scale_4_0.tflite"), options)
     }
 
-    fun detectSpoofSync(fullFrame: Bitmap, faceRect: Rect): FaceSpoofResult {
-        return calculateSpoof(fullFrame, faceRect)
-    }
-
     suspend fun detectSpoof(fullFrame: Bitmap, faceRect: Rect): FaceSpoofResult = withContext(Dispatchers.Default) {
         return@withContext calculateSpoof(fullFrame, faceRect)
     }

@@ -37,7 +37,7 @@ export default function recognitionScreen() {
 
     const processResult = async (res: FaceRecognitionResult) => {
         setResult(res);
-        if (res.success && res.isLive && res.embedding) {
+        if (res.success && res.isLive && !res.isWearingGlasses && res.embedding) {
             const match = await identifyUser(res.embedding);
             if (match) {
                 setRecognizedName(`${match.name} (${match.score.toFixed(2)})`);
@@ -139,13 +139,29 @@ export default function recognitionScreen() {
                     <View style={styles.resultBox}>
                         <Text style={styles.label}>Match: <Text style={{ fontWeight: 'bold', color: recognizedName ? 'green' : 'black' }}>{recognizedName || "None"}</Text></Text>
                         {'isLive' in result && <Text style={result.isLive ? styles.success : styles.error}>Live: {result.isLive ? "YES" : "NO"}</Text>}
-                        {'spoofScore' in result && <Text style={styles.label}>Spoof Score: {result.spoofScore?.toFixed(3)}</Text>}
+                        {'isWearingGlasses' in result && <Text style={styles.label}>Glasses: {result.isWearingGlasses ? "YES" : "NO"}</Text>}
+
                         {'duration' in result && (
                             <>
                                 <Text style={styles.timingText}>Detection: {result.duration.detection}ms</Text>
-                                <Text style={styles.timingText}>Embedding: {result.duration.embedding}ms</Text>
                                 <Text style={styles.timingText}>Spoof: {result.duration.spoof}ms</Text>
-                                <Text style={styles.timingText}>Total: {result.duration.detection + result.duration.embedding + result.duration.spoof}ms</Text>
+
+                                {result.duration.glass !== undefined && (
+                                    <Text style={styles.timingText}>Glass: {result.duration.glass}ms</Text>
+                                )}
+
+                                {result.duration.embedding !== undefined && (
+                                    <Text style={styles.timingText}>Embedding: {result.duration.embedding}ms</Text>
+                                )}
+
+                                <Text style={styles.timingText}>
+                                    Total: {
+                                        result.duration.detection +
+                                        result.duration.spoof +
+                                        (result.duration.glass || 0) +
+                                        (result.duration.embedding || 0)
+                                    }ms
+                                </Text>
                             </>
                         )}
                         {'error' in result && <Text style={styles.error}>{result.error}</Text>}

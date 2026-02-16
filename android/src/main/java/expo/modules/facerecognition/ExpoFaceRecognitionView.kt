@@ -1,13 +1,11 @@
 package expo.modules.facerecognition
 
-import android.view.View.MeasureSpec
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Matrix
 import android.util.Log
 import android.view.ViewGroup
 import android.widget.FrameLayout
-import androidx.camera.core.AspectRatio
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ExperimentalGetImage
 import androidx.camera.core.ImageAnalysis
@@ -19,16 +17,15 @@ import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.createBitmap
-import androidx.core.graphics.toRectF
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
-import expo.modules.core.logging.localizedMessageWithCauseLocalizedMessage
 import expo.modules.kotlin.AppContext
 import expo.modules.kotlin.viewevent.EventDispatcher
 import expo.modules.kotlin.views.ExpoView
 import expo.modules.facerecognition.domain.FaceDetector
 import expo.modules.facerecognition.domain.FaceSpoofDetector
 import expo.modules.facerecognition.domain.FaceNet
+import expo.modules.facerecognition.domain.SpecsDetector
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -63,6 +60,8 @@ class ExpoFaceRecognitionView(context: Context, appContext: AppContext) : ExpoVi
     private val faceDetector = FaceDetector(context)
     private val faceSpoof = FaceSpoofDetector(context)
     private val faceNet = FaceNet(context)
+
+    private val specsDetector = SpecsDetector(context)
 
     private var isProcessing = false
     private var imageTransform: Matrix = Matrix()
@@ -143,6 +142,7 @@ class ExpoFaceRecognitionView(context: Context, appContext: AppContext) : ExpoVi
         scope.launch {
             onModelStatus(mapOf("status" to ModelLoadingStatus.LOADING))
             try {
+                specsDetector.initialize()
                 faceNet.setGpuEnabled(enabled)
                 onModelStatus(mapOf("status" to ModelLoadingStatus.LOADED))
                 Log.d(TAG, "Models initialized.")
@@ -292,28 +292,44 @@ class ExpoFaceRecognitionView(context: Context, appContext: AppContext) : ExpoVi
 
                 val spoofResult = faceSpoof.detectSpoof(frameBitmap, boundingBox)
 
-                val resultMap = mutableMapOf<String, Any>(
+                val resultMap = mutableMapOf(
                     "success" to true,
                     "isLive" to true,
+                    "isWearingGlasses" to false,
                     "rect" to getNormalizedFaceRect(boundingBox, image.height.toFloat(), image.width.toFloat(), width.toFloat(), height.toFloat())
                 )
 
                 if (spoofResult.isSpoof) {
                     resultMap["isLive"] = false
-                    resultMap["spoofScore"] = spoofResult.score
+                    resultMap["duration"] = mapOf(
+                        "detection" to t1.toLong(DurationUnit.MILLISECONDS),
+                        "spoof" to spoofResult.timeMillis,
+                    )
+                    onFaceDetected(resultMap)
+                    isProcessing = false
+                    return@launch
+                }
+
+                val (output, t2) = measureTimedValue { specsDetector.detectSpecs(croppedBitmap)[0] }
+                if (output > 0.5) {
+                    resultMap["isWearingGlasses"] = true
+                    resultMap["duration"] = mapOf(
+                        "detection" to t1.toLong(DurationUnit.MILLISECONDS),
+                        "spoof" to spoofResult.timeMillis,
+                        "glass" to t2.toLong(DurationUnit.MILLISECONDS)
+                    )
                     onFaceDetected(resultMap)
                     isProcessing = false
                     return@launch
                 }
 
                 val (embedding, t3) = measureTimedValue { faceNet.getFaceEmbedding(croppedBitmap) }
-
                 resultMap["embedding"] = embedding.toList()
-
                 resultMap["duration"] = mapOf(
                     "detection" to t1.toLong(DurationUnit.MILLISECONDS),
                     "spoof" to spoofResult.timeMillis,
-                    "embedding" to t3.toLong(DurationUnit.MILLISECONDS)
+                    "embedding" to t3.toLong(DurationUnit.MILLISECONDS),
+                    "glass" to t2.toLong(DurationUnit.MILLISECONDS)
                 )
                 onFaceDetected(resultMap)
                 isProcessing = false
