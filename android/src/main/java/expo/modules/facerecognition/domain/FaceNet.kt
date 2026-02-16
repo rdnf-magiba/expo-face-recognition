@@ -82,7 +82,20 @@ class FaceNet(val context: Context) {
         val tensorImage = imageProcessor.process(TensorImage.fromBitmap(faceBitmap))
         val outputBuffer = TensorBufferFloat.createFixedSize(intArrayOf(1, 512), DataType.FLOAT32)
         interpreter?.run(tensorImage.buffer, outputBuffer.buffer.rewind())
+        // return l2Normalize(outputBuffer.floatArray)
         return outputBuffer.floatArray
+    }
+
+    // Currently disabled
+    private fun l2Normalize(embeddings: FloatArray): FloatArray {
+        var sum = 0.0f
+        for (embedding in embeddings) {
+            sum += embedding * embedding
+        }
+        val norm = Math.sqrt(sum.toDouble()).toFloat()
+        // Avoid division by zero
+        val safeNorm = if (norm > 0) norm else 1.0f 
+        return embeddings.map { it / safeNorm }.toFloatArray()
     }
 
     class NormalizeOp : TensorOperator {
