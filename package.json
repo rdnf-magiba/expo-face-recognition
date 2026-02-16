@@ -1,6 +1,6 @@
 {
   "name": "@rdnf-magiba/expo-face-recognition",
-  "version": "0.1.13",
+  "version": "0.1.14",
   "description": "Face recognition",
   "main": "build/index.js",
   "types": "build/index.d.ts",
